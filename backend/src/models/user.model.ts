@@ -7,12 +7,13 @@ const UserSchema = new Schema<IUser>(
   {
     fullName: { type: String, required: true },
     email: { type: String, required: true, unique: true },
+    countryCode:{type:String,required:true},
     phone: { type: String, required: true },
     address: { type: String, required: true },
     password: { type: String, required: true },
     role: {
       type: String,
-      enum: ["user", "admin"],
+      enum: ["user", "admin","supervisor"],
       default: "user",
     },
   },
