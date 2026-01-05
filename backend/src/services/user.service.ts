@@ -20,6 +20,7 @@ export class UserService {
     const user = await userRepository.create({
       fullName: data.fullName,
       email: data.email,
+      countryCode:data.countryCode,
       phone: data.phone,
       address: data.address,
       password: hashedPassword,
