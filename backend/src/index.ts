@@ -1,31 +1,22 @@
-import express, { Application, Request, Response } from 'express';
-import bodyParser from 'body-parser';
-import { connectDatabase } from './database/mongodb';
-import { PORT } from './config';
-import authRoutes from "./routes/auth.route";
+import express from "express";
+import cors from "cors";
+import mongoose from "mongoose";
 import dotenv from "dotenv";
-dotenv.config(); // load .env
+import authRoutes from "./routes/auth.route";
 
+dotenv.config();
 
-const app: Application = express();
+const app = express();
+app.use(cors());
+app.use(express.json());
+app.use("/api/auth", authRoutes);
 
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+const PORT = process.env.PORT || 5000;
 
-app.use('/api/auth', authRoutes);
-app.get('/', (req: Request, res: Response) => {
-    return res.status(200).json({ success: "true", message: "Welcome to the API" });
-});
-
-async function startServer() {
-    await connectDatabase();
-
-    app.listen(
-        PORT,
-        () => {
-            console.log(`Server: http://localhost:${PORT}`);
-        }
-    );
-}
-
-startServer();
+mongoose
+  .connect(process.env.MONGO_URI!)
+  .then(() => {
+    console.log("MongoDB connected");
+    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+  })
+  .catch((err) => console.error("MongoDB connection error:", err));

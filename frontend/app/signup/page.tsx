@@ -22,7 +22,7 @@ export default function SignupPage() {
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
-    countryCode: "+977",
+    countryCode: "",
     phone: "",
     address: "",
     password: "",
@@ -55,38 +55,73 @@ export default function SignupPage() {
     validateField(name, value)
   }
 
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault()
-    setErrors({})
+  const handleSubmit = async (e: FormEvent) => {
+  e.preventDefault()
+   console.log("👉 handleSubmit called")
+  setErrors({})
 
-    const newErrors: Record<string, string> = {
-      fullName: validationRules.fullName.validate(formData.fullName),
-      email: validationRules.email.validate(formData.email),
-      phone: validationRules.phone.validate(formData.phone),
-      address: validationRules.address.validate(formData.address),
-      password: validationRules.password.validate(formData.password),
-      confirmPassword: validationRules.passwordMatch.validate(formData.password, formData.confirmPassword),
-    }
+  // Validate fields
+  const newErrors: Record<string, string> = {
+    fullName: validationRules.fullName.validate(formData.fullName),
+    email: validationRules.email.validate(formData.email),
+    phone: validationRules.phone.validate(formData.phone),
+    address: validationRules.address.validate(formData.address),
+    password: validationRules.password.validate(formData.password),
+    confirmPassword: validationRules.passwordMatch.validate(formData.password, formData.confirmPassword),
+  }
 
-    const filteredErrors = Object.fromEntries(Object.entries(newErrors).filter(([, v]) => v))
+  const filteredErrors = Object.fromEntries(Object.entries(newErrors).filter(([, v]) => v))
 
-    if (Object.keys(filteredErrors).length > 0) {
-      setErrors(filteredErrors)
+  if (Object.keys(filteredErrors).length > 0) {
+    setErrors(filteredErrors)
+    return
+  }
+
+  // Call API
+  try {
+  const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/register`, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    fullName: formData.fullName,
+    email: formData.email,
+    countryCode: formData.countryCode,
+    phone: formData.phone,
+    address: formData.address,
+    password: formData.password,
+  }),
+})
+
+
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      toast({
+        title: "Registration Failed",
+        description: data.message || "Something went wrong.",
+      })
       return
     }
-
-    console.log("Form submitted:", formData)
 
     toast({
       title: "Registration Successful",
       description: "Your account has been created successfully. Redirecting to login...",
     })
 
-    // Navigate to login page after a short delay
     setTimeout(() => {
       router.push("/login")
     }, 1500)
+  } catch (error) {
+    toast({
+      title: "Network Error",
+      description: "Unable to reach the server. Please try again later.",
+    })
   }
+}
+
 
   const isFormValid =
     Object.values(errors).every((error) => !error) &&
@@ -96,6 +131,7 @@ export default function SignupPage() {
     formData.address &&
     formData.password &&
     formData.confirmPassword
+
 
   return (
     <div className="min-h-screen grid md:grid-cols-2">
@@ -248,11 +284,12 @@ export default function SignupPage() {
 
             <Button
               type="submit"
-              className="w-full bg-green-600 hover:bg-green-700 text-white py-6 text-lg disabled:opacity-50"
-              disabled={!isFormValid}
+              className="w-full bg-green-600 hover:bg-green-700 text-white py-6 text-lg"
+              disabled={false} 
             >
               Register
             </Button>
+
 
             <div className="text-center">
               <span className="text-gray-500">or</span>
