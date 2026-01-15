@@ -25,6 +25,8 @@ export class UserService {
       address: data.address,
       password: hashedPassword,
       role: "user",
+      profile_picture:data.profile_picture,
+      deleted_at:data.deleted_at,
     });
 
     return user;

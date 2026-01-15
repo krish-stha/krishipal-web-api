@@ -9,7 +9,13 @@ export const CreateUserDTO = UserSchema.extend({
   phone: z.string().min(10, "Phone number is required"),
   address: z.string().min(1, "Address is required"),
   password: z.string().min(6, "Password must be at least 6 characters"),
-}).passthrough(); // ignore any extra fields like confirmPassword
+
+
+  profile_picture: z.string().nullable().optional(),
+
+
+  deleted_at: z.date().nullable().optional()
+}).passthrough(); // ignore extra fields like confirmPassword
 
 export type CreateUserDTO = z.infer<typeof CreateUserDTO>;
 
