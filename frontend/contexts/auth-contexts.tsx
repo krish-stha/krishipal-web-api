@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
+import Cookies from "js-cookie"
 
 interface User {
   email: string
@@ -22,9 +23,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
 
-  // Check localStorage for user on mount
+
   useEffect(() => {
-    const storedUser = localStorage.getItem("krishipal_user")
+    const storedUser = Cookies.get("krishipal_user")
     if (storedUser) {
       setUser(JSON.parse(storedUser))
     }
@@ -34,25 +35,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string) => {
     setIsLoading(true)
     try {
-
       const res = await fetch("http://localhost:5000/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       })
+
       const data = await res.json()
 
       if (!res.ok) {
         throw new Error(data.message || "Login failed")
       }
 
-      // Save user info and token
+      // ✅ Save token & user in COOKIES (NOT localStorage)
       const userData = { email: data.user.email, name: data.user.name }
-      setUser(userData)
-      localStorage.setItem("krishipal_user", JSON.stringify(userData))
-      localStorage.setItem("krishipal_token", data.token)
 
-      router.push("/") // redirect to home
+      Cookies.set("krishipal_user", JSON.stringify(userData), { expires: 1 })
+      Cookies.set("krishipal_token", data.token, { expires: 1 })
+
+      setUser(userData)
+      router.push("/")
     } catch (err: any) {
       throw new Error(err.message || "Login failed")
     } finally {
@@ -62,8 +64,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     setUser(null)
-    localStorage.removeItem("krishipal_user")
-    localStorage.removeItem("krishipal_token")
+    Cookies.remove("krishipal_user")
+    Cookies.remove("krishipal_token")
     router.push("/")
   }
 
