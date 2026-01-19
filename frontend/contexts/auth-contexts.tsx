@@ -23,7 +23,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
 
-  // ✅ Read user from cookies on app load
+
   useEffect(() => {
     const storedUser = Cookies.get("krishipal_user")
     if (storedUser) {
