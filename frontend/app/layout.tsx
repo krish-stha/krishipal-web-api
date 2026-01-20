@@ -6,10 +6,6 @@ import "./globals.css"
 import { AuthProvider } from "@/contexts/auth-contexts"
 import { Toaster } from "@/components/ui/toaster"
 
-
-
-
-
 const _geist = Geist({ subsets: ["latin"] })
 const _geistMono = Geist_Mono({ subsets: ["latin"] })
 
@@ -44,10 +40,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`font-sans antialiased`}>
-        <AuthProvider>{children}</AuthProvider>
-            <Toaster />
- 
+      <body className="font-sans antialiased">
+        <AuthProvider>
+          {children}
+          <Toaster />
+        </AuthProvider>
+
         <Analytics />
       </body>
     </html>

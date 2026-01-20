@@ -3,38 +3,31 @@
 import { useState, type FormEvent } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { useRouter } from "next/navigation"
 import { Eye, EyeOff, Home } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { validationRules } from "@/lib/validation"
-import { useAuth } from "@/contexts/auth-contexts" // import AuthContext
+import { useAuth } from "@/contexts/auth-contexts"
 
 export default function LoginPage() {
-  const { login } = useAuth() // get login function
+  const { login } = useAuth()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [errors, setErrors] = useState<{ email?: string; password?: string }>({})
-  const router = useRouter()
+  const [errors, setErrors] = useState<{ email?: string; password?: string; general?: string }>({})
 
-  // Validate individual fields
   const validateField = (field: string, value: string) => {
     let error = ""
-    if (field === "email") {
-      error = validationRules.email.validate(value)
-    } else if (field === "password") {
-      error = validationRules.password.validate(value)
-    }
-    setErrors((prev) => ({ ...prev, [field]: error }))
+    if (field === "email") error = validationRules.email.validate(value)
+    if (field === "password") error = validationRules.password.validate(value)
+    setErrors((prev) => ({ ...prev, [field]: error, general: "" }))
   }
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setErrors({})
 
-    // Validate fields
     const emailError = validationRules.email.validate(email)
     const passwordError = validationRules.password.validate(password)
 
@@ -45,10 +38,10 @@ export default function LoginPage() {
 
     setIsLoading(true)
     try {
-      await login(email, password) // call AuthContext login
+      await login(email, password)
       // Redirect handled in AuthContext
     } catch (err: any) {
-      setErrors({ email: err.message || "Invalid credentials. Please try again." })
+      setErrors({ general: err.message || "Invalid credentials. Please try again." })
     } finally {
       setIsLoading(false)
     }
@@ -56,7 +49,6 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen grid md:grid-cols-2">
-      {/* Left side - Image */}
       <div className="hidden md:block relative bg-green-900">
         <Image
           src="/images/fresh-green-vegetables-zucchini-lettuce-cabbage.png"
@@ -66,7 +58,6 @@ export default function LoginPage() {
         />
       </div>
 
-      {/* Right side - Login Form */}
       <div className="flex items-center justify-center p-8">
         <div className="w-full max-w-md">
           <div className="mb-8">
@@ -87,8 +78,9 @@ export default function LoginPage() {
           </h1>
           <p className="text-gray-600 mb-8">Login to manage your account</p>
 
+          {errors.general && <p className="text-red-600 text-sm mb-4">{errors.general}</p>}
+
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Email input */}
             <div>
               <Input
                 type="email"
@@ -104,7 +96,6 @@ export default function LoginPage() {
               {errors.email && <p className="text-red-600 text-sm mt-2">{errors.email}</p>}
             </div>
 
-            {/* Password input */}
             <div className="relative">
               <Input
                 type={showPassword ? "text" : "password"}
