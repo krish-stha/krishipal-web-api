@@ -1,8 +1,9 @@
 import Image from "next/image"
-import { Button } from "@/components/ui/button"
-import { Header } from "@/components/header"
-import { Footer } from "@/components/footer"
-import { Card, CardContent } from "@/components/ui/card"
+import { Header } from "../../component/header"
+import { Card, CardContent } from "@/app/auth/components/ui/card"
+import { Button } from "@/app/auth/components/ui/button"
+import { Footer } from "../../component/footer"
+
 
 export default function ShopPage() {
   const categories = [

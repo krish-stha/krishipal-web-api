@@ -4,10 +4,10 @@ import { useState, type FormEvent } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { Eye, EyeOff, Home } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { Button } from "@/app/auth/components/ui/button"
+import { Input } from "@/app/auth/components/ui/input"
 import { validationRules } from "@/lib/validation"
-import { useAuth } from "@/contexts/auth-contexts"
+import { useAuth } from "@/lib/contexts/auth-contexts"
 
 export default function LoginPage() {
   const { login } = useAuth()
@@ -139,7 +139,7 @@ export default function LoginPage() {
 
           <p className="text-center mt-8 text-gray-600">
             {"Don't have an account? "}
-            <Link href="/signup" className="text-green-600 hover:underline font-medium">
+            <Link href="/auth/signup" className="text-green-600 hover:underline font-medium">
               Sign up here
             </Link>
           </p>

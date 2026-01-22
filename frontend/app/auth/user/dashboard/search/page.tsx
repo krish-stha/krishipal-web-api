@@ -1,11 +1,12 @@
 "use client"
 
 import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Header } from "@/components/header"
-import { Footer } from "@/components/footer"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Header } from "../../component/header"
+import { Input } from "@/app/auth/components/ui/input"
+import { Button } from "@/app/auth/components/ui/button"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@radix-ui/react-select"
+import { Footer } from "../../component/footer"
+
 
 export default function SearchPage() {
   const [searchQuery, setSearchQuery] = useState("seed")
