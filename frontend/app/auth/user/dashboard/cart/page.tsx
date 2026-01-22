@@ -1,5 +1,5 @@
-import { Header } from "@/components/header"
-import { Footer } from "@/components/footer"
+import { Header } from "@/app/auth/user/component/header"
+import { Footer } from "@/app/auth/user/component/footer"
 
 export default function CartPage() {
   return (

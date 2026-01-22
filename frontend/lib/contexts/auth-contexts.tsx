@@ -109,7 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
     Cookies.remove("krishipal_user")
     Cookies.remove("krishipal_token")
-    router.push("/login")
+    router.push("/auth/login")
   }
 
   return (

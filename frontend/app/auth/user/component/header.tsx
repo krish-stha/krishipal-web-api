@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { ShoppingCart, LogOut, User } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { Button } from "@/app/auth/components/ui/button"
 import Image from "next/image"
 import {
   DropdownMenu,
@@ -11,8 +11,8 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { useAuth } from "@/contexts/auth-contexts"
+} from "@/app/auth/components/ui/dropdown-menu"
+import { useAuth } from "@/lib/contexts/auth-contexts"
 
 export function Header() {
   const { user, logout, isLoading } = useAuth()
@@ -39,19 +39,19 @@ export function Header() {
           <Link href="/" className="text-gray-700 hover:text-green-600 transition-colors">
             Home
           </Link>
-          <Link href="/about" className="text-gray-700 hover:text-green-600 transition-colors">
+          <Link href="/auth/user/dashboard/about" className="text-gray-700 hover:text-green-600 transition-colors">
             About
           </Link>
-          <Link href="/blogs" className="text-gray-700 hover:text-green-600 transition-colors">
+          <Link href="/auth/user/dashboard/blogs" className="text-gray-700 hover:text-green-600 transition-colors">
             Blogs
           </Link>
-          <Link href="/contact" className="text-gray-700 hover:text-green-600 transition-colors">
+          <Link href="/auth/user/dashboard/contact" className="text-gray-700 hover:text-green-600 transition-colors">
             Contact
           </Link>
-          <Link href="/shop" className="text-gray-700 hover:text-green-600 transition-colors">
+          <Link href="/auth/user/dashboard/shop" className="text-gray-700 hover:text-green-600 transition-colors">
             Shop
           </Link>
-          <Link href="/search" className="text-gray-700 hover:text-green-600 transition-colors">
+          <Link href="/auth/user/dashboard/search" className="text-gray-700 hover:text-green-600 transition-colors">
             Search
           </Link>
         </nav>
@@ -59,7 +59,7 @@ export function Header() {
         {/* Cart and User */}
         <div className="flex items-center gap-4">
           {/* Shopping Cart */}
-          <Link href="/cart" className="relative">
+          <Link href="/auth/user/dashboard/cart" className="relative">
             <ShoppingCart className="h-6 w-6 text-gray-700" />
             <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
               0
@@ -95,7 +95,7 @@ export function Header() {
                   </DropdownMenuContent>
                 </DropdownMenu>
               ) : (
-                <Link href="/login">
+                <Link href="/auth/login">
                   <Button className="bg-green-600 hover:bg-green-700 text-white">
                     Sign in
                   </Button>

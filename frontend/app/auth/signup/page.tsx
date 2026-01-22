@@ -6,9 +6,9 @@ import Link from "next/link"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { Eye, EyeOff, Home } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Button } from "@/app/auth/components/ui/button"
+import { Input } from "@/app/auth/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/auth/components/ui/select"
 import { validationRules } from "@/lib/validation"
 import { useToast } from "@/hooks/use-toast"
 
@@ -112,7 +112,7 @@ export default function SignupPage() {
     })
 
     setTimeout(() => {
-      router.push("/login")
+      router.push("/auth/login")
     }, 1500)
   } catch (error) {
     toast({
