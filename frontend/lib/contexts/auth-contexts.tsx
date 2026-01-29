@@ -82,7 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       /* 🔐 SAVE ONLY REQUIRED DATA */
       const userData: User = {
-        id: data.user.id,
+        id: data.user._id || data.user.id,
         email: data.user.email,
         name: data.user.fullName,
         role: data.user.role,
