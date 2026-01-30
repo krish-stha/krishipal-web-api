@@ -2,11 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Cookies from "js-cookie";
 import { Input } from "@/app/auth/components/ui/input";
 import { Button } from "@/app/auth/components/ui/button";
-
-const API = process.env.NEXT_PUBLIC_API_URL!;
+import { adminCreateUser } from "@/lib/api/admin/user";
 
 export default function AdminCreateUserPage() {
   const router = useRouter();
@@ -28,25 +26,16 @@ export default function AdminCreateUserPage() {
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      const token = Cookies.get("krishipal_token");
-
       const fd = new FormData();
       Object.entries(form).forEach(([k, v]) => fd.append(k, v));
       if (file) fd.append("profilePicture", file);
 
-      const res = await fetch(`${API}/admin/users`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: fd,
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.message || "Create failed");
+      await adminCreateUser(fd);
 
       alert("User created ✅");
       router.push("/admin/users");
     } catch (e: any) {
-      alert(e.message || "Error");
+      alert(e?.response?.data?.message || e.message || "Create failed");
     } finally {
       setLoading(false);
     }
@@ -64,11 +53,7 @@ export default function AdminCreateUserPage() {
         <Input placeholder="Address" value={form.address} onChange={(e) => onChange("address", e.target.value)} />
         <Input type="password" placeholder="Password" value={form.password} onChange={(e) => onChange("password", e.target.value)} />
 
-        <select
-          className="border p-3 rounded w-full"
-          value={form.role}
-          onChange={(e) => onChange("role", e.target.value)}
-        >
+        <select className="border p-3 rounded w-full" value={form.role} onChange={(e) => onChange("role", e.target.value)}>
           <option value="user">user</option>
           <option value="admin">admin</option>
         </select>

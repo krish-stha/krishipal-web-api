@@ -1,12 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
-import Cookies from "js-cookie";
 import { Input } from "@/app/auth/components/ui/input";
 import { Button } from "@/app/auth/components/ui/button";
-
-const API = process.env.NEXT_PUBLIC_API_URL!;
+import { adminGetUserById, adminUpdateUser, adminSoftDeleteUser } from "@/lib/api/admin/user";
 
 export default function AdminUserEditPage() {
   const { id } = useParams();
@@ -27,29 +25,42 @@ export default function AdminUserEditPage() {
 
   const onChange = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
+  // ✅ Prefill (recommended)
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await adminGetUserById(id as string);
+        const u = res.data;
+        setForm({
+          fullName: u.fullName || "",
+          email: u.email || "",
+          countryCode: u.countryCode || "",
+          phone: u.phone || "",
+          address: u.address || "",
+          password: "",
+          role: u.role || "user",
+        });
+      } catch (e: any) {
+        alert(e?.response?.data?.message || e.message || "Failed to load user");
+      }
+    })();
+  }, [id]);
+
   const handleUpdate = async () => {
     setLoading(true);
     try {
-      const token = Cookies.get("krishipal_token");
       const fd = new FormData();
       Object.entries(form).forEach(([k, v]) => {
-        if (v) fd.append(k, v); // only send filled
+        if (v) fd.append(k, v);
       });
       if (file) fd.append("profilePicture", file);
 
-      const res = await fetch(`${API}/admin/users/${id}`, {
-        method: "PUT",
-        headers: { Authorization: `Bearer ${token}` },
-        body: fd,
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.message || "Update failed");
+      await adminUpdateUser(id as string, fd);
 
       alert("Updated ✅");
       router.push("/admin/users");
     } catch (e: any) {
-      alert(e.message || "Error");
+      alert(e?.response?.data?.message || e.message || "Update failed");
     } finally {
       setLoading(false);
     }
@@ -60,18 +71,12 @@ export default function AdminUserEditPage() {
 
     setLoading(true);
     try {
-      const token = Cookies.get("krishipal_token");
-      const res = await fetch(`${API}/admin/users/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.message || "Delete failed");
+      await adminSoftDeleteUser(id as string);
 
       alert("Deleted ✅");
       router.push("/admin/users");
     } catch (e: any) {
-      alert(e.message || "Error");
+      alert(e?.response?.data?.message || e.message || "Delete failed");
     } finally {
       setLoading(false);
     }

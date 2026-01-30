@@ -1,21 +1,21 @@
 "use client"
 
 import Link from "next/link"
-import { ShoppingCart, LogOut, User } from "lucide-react"
+import { ShoppingCart, User, LogOut } from "lucide-react"
 import { Button } from "@/app/auth/components/ui/button"
 import Image from "next/image"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/app/auth/components/ui/dropdown-menu"
 import { useAuth } from "@/lib/contexts/auth-contexts"
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet"
+import UserProfilePanel from "../profile/UserProfilePanel"
 
 export function Header() {
-  const { user, logout, isLoading } = useAuth()
+  const { user, isLoading, logout } = useAuth()
 
   return (
     <header className="border-b bg-white sticky top-0 z-50 shadow-sm">
@@ -36,29 +36,25 @@ export function Header() {
 
         {/* Navigation Links */}
         <nav className="hidden md:flex items-center gap-8">
-          <Link href="/" className="text-gray-700 hover:text-green-600 transition-colors">
-            Home
-          </Link>
-          <Link href="/user/dashboard/about" className="text-gray-700 hover:text-green-600 transition-colors">
-            About
-          </Link>
-          <Link href="/user/dashboard/blogs" className="text-gray-700 hover:text-green-600 transition-colors">
-            Blogs
-          </Link>
-          <Link href="/user/dashboard/contact" className="text-gray-700 hover:text-green-600 transition-colors">
-            Contact
-          </Link>
-          <Link href="/user/dashboard/shop" className="text-gray-700 hover:text-green-600 transition-colors">
-            Shop
-          </Link>
-          <Link href="/user/dashboard/search" className="text-gray-700 hover:text-green-600 transition-colors">
-            Search
-          </Link>
+          <Link href="/" className="text-gray-700 hover:text-green-600">Home</Link>
+          <Link href="/user/dashboard/about" className="text-gray-700 hover:text-green-600">About</Link>
+          <Link href="/user/dashboard/blogs" className="text-gray-700 hover:text-green-600">Blogs</Link>
+          <Link href="/user/dashboard/contact" className="text-gray-700 hover:text-green-600">Contact</Link>
+          <Link href="/user/dashboard/shop" className="text-gray-700 hover:text-green-600">Shop</Link>
+          <Link href="/user/dashboard/search" className="text-gray-700 hover:text-green-600">Search</Link>
+
+          {user?.role === "admin" && (
+            <Link
+              href="/admin/users"
+              className="text-red-600 hover:text-red-700 font-semibold"
+            >
+              Admin Panel
+            </Link>
+          )}
         </nav>
 
-        {/* Cart and User */}
+        {/* Cart + Profile */}
         <div className="flex items-center gap-4">
-          {/* Shopping Cart */}
           <Link href="/user/dashboard/cart" className="relative">
             <ShoppingCart className="h-6 w-6 text-gray-700" />
             <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
@@ -66,42 +62,43 @@ export function Header() {
             </span>
           </Link>
 
-          {/* User Login / Dropdown */}
-          {!isLoading && (
-            <>
-              {user ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button className="bg-green-600 hover:bg-green-700 text-white gap-2">
-                      <User className="h-4 w-4" />
-                      <span className="truncate">{user.email}</span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56">
-                    <DropdownMenuLabel>My Account</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem disabled>
-                      <User className="mr-2 h-4 w-4" />
-                      <span className="truncate">{user.email}</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={logout}
-                      className="text-red-600 focus:text-red-600"
-                    >
-                      <LogOut className="mr-2 h-4 w-4" />
-                      <span>Logout</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : (
-                <Link href="/auth/login">
-                  <Button className="bg-green-600 hover:bg-green-700 text-white">
-                    Sign in
+          {!isLoading && user && (
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button className="bg-green-600 hover:bg-green-700 text-white gap-2">
+                  <User className="h-4 w-4" />
+                  <span className="truncate">{user.email}</span>
+                </Button>
+              </SheetTrigger>
+
+              <SheetContent side="right" className="w-[380px] sm:w-[420px]">
+                <SheetHeader>
+                  <SheetTitle>My Profile</SheetTitle>
+                </SheetHeader>
+
+                <div className="mt-6 space-y-6">
+                  <UserProfilePanel />
+
+                  {/* ✅ Logout button */}
+                  <Button
+                    variant="outline"
+                    onClick={logout}
+                    className="w-full border-red-500 text-red-600 hover:bg-red-50"
+                  >
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Logout
                   </Button>
-                </Link>
-              )}
-            </>
+                </div>
+              </SheetContent>
+            </Sheet>
+          )}
+
+          {!isLoading && !user && (
+            <Link href="/auth/login">
+              <Button className="bg-green-600 hover:bg-green-700 text-white">
+                Sign in
+              </Button>
+            </Link>
           )}
         </div>
       </div>

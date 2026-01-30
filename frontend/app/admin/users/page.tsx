@@ -2,34 +2,42 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import Cookies from "js-cookie";
 import { Button } from "@/app/auth/components/ui/button";
-
-const API = process.env.NEXT_PUBLIC_API_URL!;
+import { adminListUsers } from "@/lib/api/admin/user";
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-
-  const fetchUsers = async () => {
-    setLoading(true);
-    try {
-      const token = Cookies.get("krishipal_token");
-      const res = await fetch(`${API}/admin/users`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.message || "Failed to load users");
-      setUsers(data.data || []);
-    } catch (e: any) {
-      alert(e.message || "Failed");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchUsers();
+    let mounted = true;
+
+    (async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const res = await adminListUsers();
+        if (!mounted) return;
+
+        setUsers(res?.data || []);
+      } catch (e: any) {
+        if (!mounted) return;
+
+        const msg =
+          e?.response?.data?.message ||
+          e?.message ||
+          "Failed to load users";
+        setError(msg);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   return (
@@ -38,13 +46,21 @@ export default function AdminUsersPage() {
         <h1 className="text-2xl font-bold">Admin Users</h1>
 
         <Link href="/admin/users/create">
-          <Button className="bg-green-600 hover:bg-green-700">+ Create User</Button>
+          <Button className="bg-green-600 hover:bg-green-700">
+            + Create User
+          </Button>
         </Link>
       </div>
 
-      {loading ? (
-        <p>Loading...</p>
-      ) : (
+      {loading && <p>Loading...</p>}
+
+      {!loading && error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl mb-4">
+          {error}
+        </div>
+      )}
+
+      {!loading && !error && (
         <div className="overflow-x-auto bg-white rounded-xl shadow">
           <table className="w-full text-left">
             <thead className="bg-gray-100">
@@ -55,6 +71,7 @@ export default function AdminUsersPage() {
                 <th className="p-3">Action</th>
               </tr>
             </thead>
+
             <tbody>
               {users.map((u) => (
                 <tr key={u._id} className="border-t">
@@ -62,10 +79,16 @@ export default function AdminUsersPage() {
                   <td className="p-3">{u.email}</td>
                   <td className="p-3">{u.role}</td>
                   <td className="p-3 flex gap-3">
-                    <Link className="text-blue-600" href={`/admin/users/${u._id}`}>
+                    <Link
+                      href={`/admin/users/${u._id}`}
+                      className="text-blue-600"
+                    >
                       View
                     </Link>
-                    <Link className="text-green-700" href={`/admin/users/${u._id}/edit`}>
+                    <Link
+                      href={`/admin/users/${u._id}/edit`}
+                      className="text-green-700"
+                    >
                       Edit
                     </Link>
                   </td>
@@ -74,7 +97,7 @@ export default function AdminUsersPage() {
 
               {!users.length && (
                 <tr>
-                  <td className="p-3 text-gray-500" colSpan={4}>
+                  <td colSpan={4} className="p-3 text-gray-500">
                     No users found
                   </td>
                 </tr>
