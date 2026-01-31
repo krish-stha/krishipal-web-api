@@ -18,6 +18,8 @@ app.use(express.json());
 
 // Serve public folder
 app.use("/public", express.static(path.join(process.cwd(), "public")));
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+
 
 app.use("/api/auth", authRoutes);
 app.use("/api/batches", addressBatchRoutes);

@@ -74,6 +74,7 @@ export class AuthController {
     // PUT /api/auth/:id (multer) - update user profile
     // PUT /api/auth/:id  (update own profile, admin can update anyone)
   async updateProfile(req: AuthRequest, res: Response) {
+    
     const loggedUser = req.user;
     if (!loggedUser) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
@@ -87,6 +88,10 @@ export class AuthController {
     }
 
     const file = (req as any).file as Express.Multer.File | undefined;
+    console.log("REQ.FILE =", file);
+console.log("SAVED PATH =", file?.path);
+console.log("DEST =", file?.destination);
+
     const profileFilename = file?.filename ?? null;
 
     const updated = await userService.updateProfileById(paramId, req.body, profileFilename);

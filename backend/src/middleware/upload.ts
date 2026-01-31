@@ -18,14 +18,21 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter: multer.Options["fileFilter"] = (_req, file, cb) => {
-  // ✅ allow only this field name across app
-  if (file.fieldname !== "profilePicture") return cb(null, false);
+  if (file.fieldname !== "profilePicture") {
+    return cb(new Error("Invalid field name. Use profilePicture"));
+  }
 
-  // ✅ allow common image formats
-  if (!/\.(jpg|jpeg|png|gif|webp)$/i.test(file.originalname)) return cb(null, false);
+  const allowed = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+
+  if (!allowed.includes(file.mimetype)) {
+    return cb(
+      new Error(`Only JPG/PNG/GIF/WEBP allowed. Got: ${file.mimetype}`)
+    );
+  }
 
   cb(null, true);
 };
+
 
 export const uploadProfilePicture = multer({
   storage,

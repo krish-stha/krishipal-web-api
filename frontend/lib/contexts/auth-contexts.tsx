@@ -1,15 +1,26 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  type ReactNode,
+} from "react";
 import { useRouter } from "next/navigation";
-import { getUser, clearAuthCookies } from "@/lib/cookie";
+import { getUser, clearAuthCookies, updateUserCookie } from "@/lib/cookie";
 import { loginApi } from "@/lib/api/auth";
+import { api } from "@/lib/api/axios";
+import { endpoints } from "@/lib/api/endpoints";
 
 interface User {
   id: string;
   email: string;
   name: string;
   role: "user" | "admin";
+
+  // ✅ add so UI can use it if needed later
+  profile_picture?: string;
 }
 
 interface AuthContextType {
@@ -37,9 +48,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const u = await loginApi(email, password); // saves cookies internally
       setUser(u);
 
+      // ✅ fetch full profile (includes profile_picture)
+      try {
+        const meRes = await api.get(endpoints.auth.me);
+        const me = meRes?.data?.data ?? meRes?.data;
+
+        const profile_picture: string | undefined = me?.profile_picture;
+
+        // update cookie + notify header
+        if (profile_picture) {
+          updateUserCookie({
+            profile_picture,
+            name: me?.fullName ?? me?.name ?? u.name,
+            email: me?.email ?? u.email,
+          });
+        }
+
+        // update in-memory user too (optional but clean)
+        setUser((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            name: me?.fullName ?? me?.name ?? prev.name,
+            email: me?.email ?? prev.email,
+            profile_picture: profile_picture ?? prev.profile_picture,
+          };
+        });
+      } catch {
+        // if /me fails, still allow login + redirect
+      }
+
       // ✅ Redirect after login (your requirement)
       if (u.role === "admin") router.push("/admin/users");
-      else router.push("/"); // ✅ not /user/profile
+      else router.push("/");
     } finally {
       setIsLoading(false);
     }

@@ -1,21 +1,124 @@
-"use client"
+"use client";
 
-import Link from "next/link"
-import { ShoppingCart, User, LogOut } from "lucide-react"
-import { Button } from "@/app/auth/components/ui/button"
-import Image from "next/image"
-import { useAuth } from "@/lib/contexts/auth-contexts"
+import Link from "next/link";
+import { ShoppingCart, LogOut } from "lucide-react";
+import { Button } from "@/app/auth/components/ui/button";
+import Image from "next/image";
+import { useAuth } from "@/lib/contexts/auth-contexts";
+import Cookies from "js-cookie";
+import { useEffect, useMemo, useState } from "react";
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-} from "@/components/ui/sheet"
-import UserProfilePanel from "../profile/UserProfilePanel"
+} from "@/components/ui/sheet";
+import UserProfilePanel from "../profile/UserProfilePanel";
+
+type CookieUser = {
+  name?: string;
+  email?: string;
+
+  // backend key (filename)
+  profile_picture?: string;
+
+  // frontend convenience (full url)
+  profilePicture?: string;
+
+  // fallbacks
+  profilePictureUrl?: string;
+  avatar?: string;
+  photo?: string;
+  image?: string;
+  profile_photo?: string;
+};
+
+const COOKIE_KEY = "krishipal_user";
+const USER_UPDATED_EVENT = "krishipal_user_updated";
+
+// ✅ IMPORTANT: use BACKEND_URL (NO /api) for images
+const BACKEND_URL =
+  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+function normalizePhotoUrl(photo: string | null): string | null {
+  if (!photo) return null;
+
+  if (photo.startsWith("http://") || photo.startsWith("https://")) return photo;
+
+  // ✅ filename only -> /public/profile_photo
+  if (!photo.includes("/")) return `${BACKEND_URL}/public/profile_photo/${photo}`;
+
+  if (photo.startsWith("public/")) return `${BACKEND_URL}/${photo}`;
+  if (photo.startsWith("/public/")) return `${BACKEND_URL}${photo}`;
+
+  if (photo.startsWith("profile_photo/")) return `${BACKEND_URL}/public/${photo}`;
+  if (photo.startsWith("/profile_photo/")) return `${BACKEND_URL}/public${photo}`;
+
+  if (!photo.startsWith("/")) return `${BACKEND_URL}/${photo}`;
+  return `${BACKEND_URL}${photo}`;
+}
+
+
+function getCookieUser(): CookieUser | null {
+  const raw = Cookies.get(COOKIE_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function getProfilePhoto(u: CookieUser | null): string | null {
+  if (!u) return null;
+
+  const raw =
+    u.profilePicture ||
+    u.profile_picture ||
+    u.profilePictureUrl ||
+    u.avatar ||
+    u.photo ||
+    u.image ||
+    u.profile_photo ||
+    null;
+
+  return normalizePhotoUrl(raw);
+}
+
+function initials(name?: string, email?: string) {
+  const n = (name || "").trim();
+  if (n) return n[0].toUpperCase();
+  const e = (email || "").trim();
+  if (e) return e[0].toUpperCase();
+  return "U";
+}
 
 export function Header() {
-  const { user, isLoading, logout } = useAuth()
+  const { user, isLoading, logout } = useAuth();
+
+  const [cookieName, setCookieName] = useState("");
+  const [cookieEmail, setCookieEmail] = useState("");
+  const [cookiePhoto, setCookiePhoto] = useState<string | null>(null);
+
+  const syncFromCookie = () => {
+    const cu = getCookieUser();
+    setCookieName(cu?.name || "");
+    setCookieEmail(cu?.email || "");
+    setCookiePhoto(getProfilePhoto(cu));
+  };
+
+  useEffect(() => {
+    syncFromCookie();
+    window.addEventListener(USER_UPDATED_EVENT, syncFromCookie);
+    return () =>
+      window.removeEventListener(USER_UPDATED_EVENT, syncFromCookie);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.email]);
+
+  const avatarInitial = useMemo(
+    () => initials(cookieName, cookieEmail || user?.email),
+    [cookieName, cookieEmail, user?.email]
+  );
 
   return (
     <header className="border-b bg-white sticky top-0 z-50 shadow-sm">
@@ -36,12 +139,39 @@ export function Header() {
 
         {/* Navigation Links */}
         <nav className="hidden md:flex items-center gap-8">
-          <Link href="/" className="text-gray-700 hover:text-green-600">Home</Link>
-          <Link href="/user/dashboard/about" className="text-gray-700 hover:text-green-600">About</Link>
-          <Link href="/user/dashboard/blogs" className="text-gray-700 hover:text-green-600">Blogs</Link>
-          <Link href="/user/dashboard/contact" className="text-gray-700 hover:text-green-600">Contact</Link>
-          <Link href="/user/dashboard/shop" className="text-gray-700 hover:text-green-600">Shop</Link>
-          <Link href="/user/dashboard/search" className="text-gray-700 hover:text-green-600">Search</Link>
+          <Link href="/" className="text-gray-700 hover:text-green-600">
+            Home
+          </Link>
+          <Link
+            href="/user/dashboard/about"
+            className="text-gray-700 hover:text-green-600"
+          >
+            About
+          </Link>
+          <Link
+            href="/user/dashboard/blogs"
+            className="text-gray-700 hover:text-green-600"
+          >
+            Blogs
+          </Link>
+          <Link
+            href="/user/dashboard/contact"
+            className="text-gray-700 hover:text-green-600"
+          >
+            Contact
+          </Link>
+          <Link
+            href="/user/dashboard/shop"
+            className="text-gray-700 hover:text-green-600"
+          >
+            Shop
+          </Link>
+          <Link
+            href="/user/dashboard/search"
+            className="text-gray-700 hover:text-green-600"
+          >
+            Search
+          </Link>
 
           {user?.role === "admin" && (
             <Link
@@ -66,7 +196,20 @@ export function Header() {
             <Sheet>
               <SheetTrigger asChild>
                 <Button className="bg-green-600 hover:bg-green-700 text-white gap-2">
-                  <User className="h-4 w-4" />
+                  <span className="h-6 w-6 rounded-full overflow-hidden bg-white/20 ring-1 ring-white/30 flex items-center justify-center">
+                    {cookiePhoto ? (
+                      <img
+                        src={cookiePhoto}
+                        alt="Profile"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-xs font-semibold">
+                        {avatarInitial}
+                      </span>
+                    )}
+                  </span>
+
                   <span className="truncate">{user.email}</span>
                 </Button>
               </SheetTrigger>
@@ -79,7 +222,6 @@ export function Header() {
                 <div className="mt-6 space-y-6">
                   <UserProfilePanel />
 
-                  {/* ✅ Logout button */}
                   <Button
                     variant="outline"
                     onClick={logout}
@@ -103,5 +245,5 @@ export function Header() {
         </div>
       </div>
     </header>
-  )
+  );
 }

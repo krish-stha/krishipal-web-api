@@ -3,7 +3,7 @@ import { AuthController } from "../controllers/auth.controller";
 import { protect } from "../middleware/auth.middleware";
 import { uploadProfilePicture } from "../middleware/upload";
 import { asyncHandler } from "../middleware/async.middleware";
-
+import { multerErrorHandler } from "../middleware/multer_error.middleware";
 const router = Router();
 const controller = new AuthController();
 
@@ -23,8 +23,8 @@ router.put(
   "/:id",
   protect,
   uploadProfilePicture.single("profilePicture"),
-  controller.updateProfile.bind(controller)
+  multerErrorHandler,
+  asyncHandler(controller.updateProfile.bind(controller))
 );
-
 
 export default router;
