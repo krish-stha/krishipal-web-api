@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { ShoppingCart, LogOut } from "lucide-react";
 import { Button } from "@/app/auth/components/ui/button";
-import Image from "next/image";
 import { useAuth } from "@/lib/contexts/auth-contexts";
 import Cookies from "js-cookie";
 import { useEffect, useMemo, useState } from "react";
@@ -35,17 +35,22 @@ type CookieUser = {
 };
 
 const COOKIE_KEY = "krishipal_user";
-const USER_UPDATED_EVENT = "krishipal_user_updated";
+export const USER_UPDATED_EVENT = "krishipal_user_updated";
+
+// ✅ NEW: close sheet event (UserProfilePanel dispatches this after save)
+const PROFILE_CLOSE_EVENT = "krishipal_profile_close";
 
 // ✅ IMPORTANT: use BACKEND_URL (NO /api) for images
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+
+// ---------------- helpers ----------------
 function normalizePhotoUrl(photo: string | null): string | null {
   if (!photo) return null;
 
   if (photo.startsWith("http://") || photo.startsWith("https://")) return photo;
 
-  // ✅ filename only -> /public/profile_photo
+  // filename only -> /public/profile_photo/<filename>
   if (!photo.includes("/")) return `${BACKEND_URL}/public/profile_photo/${photo}`;
 
   if (photo.startsWith("public/")) return `${BACKEND_URL}/${photo}`;
@@ -58,12 +63,17 @@ function normalizePhotoUrl(photo: string | null): string | null {
   return `${BACKEND_URL}${photo}`;
 }
 
+function withCacheBust(url: string | null): string | null {
+  if (!url) return null;
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}t=${Date.now()}`;
+}
 
 function getCookieUser(): CookieUser | null {
   const raw = Cookies.get(COOKIE_KEY);
   if (!raw) return null;
   try {
-    return JSON.parse(raw);
+    return JSON.parse(raw) as CookieUser;
   } catch {
     return null;
   }
@@ -92,9 +102,13 @@ function initials(name?: string, email?: string) {
   if (e) return e[0].toUpperCase();
   return "U";
 }
+// -----------------------------------------
 
 export function Header() {
   const { user, isLoading, logout } = useAuth();
+
+  // ✅ control sheet open/close
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const [cookieName, setCookieName] = useState("");
   const [cookieEmail, setCookieEmail] = useState("");
@@ -104,16 +118,26 @@ export function Header() {
     const cu = getCookieUser();
     setCookieName(cu?.name || "");
     setCookieEmail(cu?.email || "");
-    setCookiePhoto(getProfilePhoto(cu));
+    setCookiePhoto(withCacheBust(getProfilePhoto(cu)));
   };
 
+  // ✅ refresh header avatar when cookie updated
   useEffect(() => {
     syncFromCookie();
-    window.addEventListener(USER_UPDATED_EVENT, syncFromCookie);
-    return () =>
-      window.removeEventListener(USER_UPDATED_EVENT, syncFromCookie);
+
+    const handler = () => syncFromCookie();
+    window.addEventListener(USER_UPDATED_EVENT, handler);
+
+    return () => window.removeEventListener(USER_UPDATED_EVENT, handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.email]);
+
+  // ✅ close sheet after successful save (UserProfilePanel dispatches event)
+  useEffect(() => {
+    const close = () => setProfileOpen(false);
+    window.addEventListener(PROFILE_CLOSE_EVENT, close);
+    return () => window.removeEventListener(PROFILE_CLOSE_EVENT, close);
+  }, []);
 
   const avatarInitial = useMemo(
     () => initials(cookieName, cookieEmail || user?.email),
@@ -193,10 +217,13 @@ export function Header() {
           </Link>
 
           {!isLoading && user && (
-            <Sheet>
+            <Sheet open={profileOpen} onOpenChange={setProfileOpen}>
               <SheetTrigger asChild>
-                <Button className="bg-green-600 hover:bg-green-700 text-white gap-2">
-                  <span className="h-6 w-6 rounded-full overflow-hidden bg-white/20 ring-1 ring-white/30 flex items-center justify-center">
+                <Button
+                  onClick={() => setProfileOpen(true)}
+                  className="bg-green-600 hover:bg-green-700 text-white gap-2"
+                >
+                  <span className="h-7 w-7 rounded-full overflow-hidden bg-white/20 ring-1 ring-white/30 flex items-center justify-center">
                     {cookiePhoto ? (
                       <img
                         src={cookiePhoto}
@@ -204,13 +231,13 @@ export function Header() {
                         className="h-full w-full object-cover"
                       />
                     ) : (
-                      <span className="text-xs font-semibold">
+                      <span className="text-[11px] font-semibold">
                         {avatarInitial}
                       </span>
                     )}
                   </span>
 
-                  <span className="truncate">{user.email}</span>
+                  <span className="truncate max-w-[220px]">{user.email}</span>
                 </Button>
               </SheetTrigger>
 
@@ -224,7 +251,10 @@ export function Header() {
 
                   <Button
                     variant="outline"
-                    onClick={logout}
+                    onClick={() => {
+                      setProfileOpen(false);
+                      logout();
+                    }}
                     className="w-full border-red-500 text-red-600 hover:bg-red-50"
                   >
                     <LogOut className="h-4 w-4 mr-2" />

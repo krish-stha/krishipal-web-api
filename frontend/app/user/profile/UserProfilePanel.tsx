@@ -25,10 +25,17 @@ type CookieUser = {
   photo?: string;
   image?: string;
   profile_photo?: string;
+
+  countryCode?: string;
+  phone?: string;
+  address?: string;
 };
 
 const COOKIE_KEY = "krishipal_user";
 const USER_UPDATED_EVENT = "krishipal_user_updated";
+
+// ✅ NEW: close sheet event
+const PROFILE_CLOSE_EVENT = "krishipal_profile_close";
 
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
@@ -38,7 +45,7 @@ function normalizePhotoUrl(photo: string | null): string | null {
 
   if (photo.startsWith("http://") || photo.startsWith("https://")) return photo;
 
-  // ✅ filename only -> backend serves from /public/profile_photo
+  // filename only -> backend serves from /public/profile_photo
   if (!photo.includes("/")) {
     return `${BACKEND_URL}/public/profile_photo/${photo}`;
   }
@@ -157,36 +164,50 @@ export default function UserProfilePanel() {
       });
       if (file) fd.append("profilePicture", file);
 
-      // ✅ IMPORTANT: do not set Content-Type manually
       const res = await api.put(endpoints.auth.update(userId), fd);
 
-      const updated = res?.data?.data;
-      const filename = updated?.profile_picture as string | undefined;
+      const updated = res?.data?.data ?? res?.data ?? {};
+      const filename =
+        (updated?.profile_picture as string | undefined) ||
+        (updated?.profilePicture as string | undefined) ||
+        undefined;
 
-      if (filename) {
-        const url = `${BACKEND_URL}/public/profile_photo/${filename}`;
-        setCookiePhoto(url);
+      const currentRaw = Cookies.get(COOKIE_KEY);
+      const current: CookieUser = currentRaw ? JSON.parse(currentRaw) : {};
 
-        const currentRaw = Cookies.get(COOKIE_KEY);
-        const current = currentRaw ? JSON.parse(currentRaw) : {};
+      const nextFilename = filename ?? current.profile_picture;
+      const nextUrl = nextFilename
+        ? `${BACKEND_URL}/public/profile_photo/${nextFilename}`
+        : current.profilePicture || normalizePhotoUrl(extractPhoto(current));
 
-        Cookies.set(
-          COOKIE_KEY,
-          JSON.stringify({
-            ...current,
-            profile_picture: filename,
-            profilePicture: url,
-            name: updated?.fullName || updated?.name || current?.name,
-            fullName: updated?.fullName || current?.fullName,
-            email: updated?.email || current?.email,
-            role: updated?.role || current?.role,
-            _id: updated?._id || current?._id,
-          }),
-          { path: "/" }
-        );
+      setCookiePhoto(nextUrl ? `${nextUrl}?t=${Date.now()}` : null);
 
-        window.dispatchEvent(new Event(USER_UPDATED_EVENT));
-      }
+      const nextCookie: CookieUser = {
+        ...current,
+
+        _id: updated?._id || current?._id,
+        id: updated?.id || current?.id,
+        role: updated?.role || current?.role,
+
+        name: updated?.fullName || updated?.name || form.fullName || current?.name,
+        fullName: updated?.fullName || form.fullName || current?.fullName,
+        email: updated?.email || form.email || current?.email,
+
+        countryCode: updated?.countryCode || form.countryCode || current?.countryCode,
+        phone: updated?.phone || form.phone || current?.phone,
+        address: updated?.address || form.address || current?.address,
+
+        profile_picture: nextFilename,
+        profilePicture: nextUrl ?? undefined,
+      };
+
+      Cookies.set(COOKIE_KEY, JSON.stringify(nextCookie), { path: "/" });
+
+      // ✅ update headers
+      window.dispatchEvent(new Event(USER_UPDATED_EVENT));
+
+      // ✅ close sheet (admin + user)
+      window.dispatchEvent(new Event(PROFILE_CLOSE_EVENT));
 
       clearSelectedPhoto();
       alert("Profile updated ✅");
@@ -202,7 +223,11 @@ export default function UserProfilePanel() {
       <div className="flex items-center gap-4">
         <div className="relative h-14 w-14 overflow-hidden rounded-full ring-2 ring-green-100 bg-slate-100 flex items-center justify-center">
           {avatarSrc ? (
-            <img src={avatarSrc} alt="Profile" className="h-full w-full object-cover" />
+            <img
+              src={avatarSrc}
+              alt="Profile"
+              className="h-full w-full object-cover"
+            />
           ) : (
             <span className="font-semibold text-slate-700">{initial}</span>
           )}
@@ -213,7 +238,7 @@ export default function UserProfilePanel() {
             {form.fullName || "My Account"}
           </div>
           <div className="text-sm text-slate-500 truncate">
-            {form.email || user?.email || "—"}
+            {form.email || (user as any)?.email || "—"}
           </div>
 
           <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -225,7 +250,12 @@ export default function UserProfilePanel() {
               onChange={(e) => setFile(e.target.files?.[0] || null)}
             />
 
-            <Button type="button" variant="outline" className="gap-2" onClick={() => fileRef.current?.click()}>
+            <Button
+              type="button"
+              variant="outline"
+              className="gap-2"
+              onClick={() => fileRef.current?.click()}
+            >
               <Camera className="h-4 w-4" />
               Upload photo
             </Button>
@@ -249,7 +279,9 @@ export default function UserProfilePanel() {
 
       <div className="rounded-2xl border bg-white">
         <div className="border-b px-5 py-4">
-          <div className="text-sm font-semibold text-slate-900">Personal information</div>
+          <div className="text-sm font-semibold text-slate-900">
+            Personal information
+          </div>
           <div className="text-xs text-slate-500 mt-1">
             Update your contact and delivery details.
           </div>
@@ -258,43 +290,87 @@ export default function UserProfilePanel() {
         <div className="px-5 py-5">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-600">Full name</label>
-              <Input value={form.fullName} onChange={(e) => onChange("fullName", e.target.value)} placeholder="Full Name" />
+              <label className="text-xs font-semibold text-slate-600">
+                Full name
+              </label>
+              <Input
+                value={form.fullName}
+                onChange={(e) => onChange("fullName", e.target.value)}
+                placeholder="Full Name"
+              />
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-600">Email</label>
-              <Input value={form.email} onChange={(e) => onChange("email", e.target.value)} placeholder="Email" />
+              <label className="text-xs font-semibold text-slate-600">
+                Email
+              </label>
+              <Input
+                value={form.email}
+                onChange={(e) => onChange("email", e.target.value)}
+                placeholder="Email"
+              />
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-600">Country code</label>
-              <Input value={form.countryCode} onChange={(e) => onChange("countryCode", e.target.value)} placeholder="Country Code" />
+              <label className="text-xs font-semibold text-slate-600">
+                Country code
+              </label>
+              <Input
+                value={form.countryCode}
+                onChange={(e) => onChange("countryCode", e.target.value)}
+                placeholder="Country Code"
+              />
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-600">Phone</label>
-              <Input value={form.phone} onChange={(e) => onChange("phone", e.target.value)} placeholder="Phone" />
+              <label className="text-xs font-semibold text-slate-600">
+                Phone
+              </label>
+              <Input
+                value={form.phone}
+                onChange={(e) => onChange("phone", e.target.value)}
+                placeholder="Phone"
+              />
             </div>
 
             <div className="space-y-2 md:col-span-2">
-              <label className="text-xs font-semibold text-slate-600">Address</label>
-              <Input value={form.address} onChange={(e) => onChange("address", e.target.value)} placeholder="Address" />
+              <label className="text-xs font-semibold text-slate-600">
+                Address
+              </label>
+              <Input
+                value={form.address}
+                onChange={(e) => onChange("address", e.target.value)}
+                placeholder="Address"
+              />
             </div>
           </div>
 
           <div className="mt-6 rounded-xl border bg-slate-50 p-4">
             <div className="text-sm font-semibold text-slate-900">Security</div>
-            <div className="text-xs text-slate-500 mt-1">Leave this empty if you don’t want to change your password.</div>
+            <div className="text-xs text-slate-500 mt-1">
+              Leave this empty if you don’t want to change your password.
+            </div>
 
             <div className="mt-4 space-y-2">
-              <label className="text-xs font-semibold text-slate-600">New password</label>
-              <Input type="password" value={form.password} onChange={(e) => onChange("password", e.target.value)} placeholder="New Password" />
+              <label className="text-xs font-semibold text-slate-600">
+                New password
+              </label>
+              <Input
+                type="password"
+                value={form.password}
+                onChange={(e) => onChange("password", e.target.value)}
+                placeholder="New Password"
+              />
             </div>
           </div>
 
           <div className="mt-6 flex justify-end">
-            <Button type="button" onClick={handleSubmit} disabled={loading} className="bg-green-600 hover:bg-green-700 gap-2">
+            <Button
+              type="button"
+              onClick={handleSubmit}
+              disabled={loading}
+              className="bg-green-600 hover:bg-green-700 gap-2"
+            >
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
               {loading ? "Saving..." : "Save changes"}
             </Button>
