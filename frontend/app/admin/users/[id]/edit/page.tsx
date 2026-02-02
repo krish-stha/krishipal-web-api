@@ -1,9 +1,10 @@
-// app/admin/users/[id]/edit/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import Cookies from "js-cookie";
+import { useAuth } from "@/lib/contexts/auth-contexts";
 import { Input } from "@/app/auth/components/ui/input";
 import { Button } from "@/app/auth/components/ui/button";
 import {
@@ -13,9 +14,20 @@ import {
 } from "@/lib/api/admin/user";
 import { ArrowLeft, Save, Trash2 } from "lucide-react";
 
+const COOKIE_KEY = "krishipal_user";
+const USER_UPDATED_EVENT = "krishipal_user_updated";
+const BACKEND_URL =
+  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+
+function profileUrl(filename?: string | null) {
+  if (!filename) return null;
+  return `${BACKEND_URL}/public/profile_photo/${filename}`;
+}
+
 export default function AdminUserEditPage() {
   const { id } = useParams();
   const router = useRouter();
+  const { user: authUser } = useAuth();
 
   const [form, setForm] = useState({
     fullName: "",
@@ -30,7 +42,8 @@ export default function AdminUserEditPage() {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const onChange = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
+  const onChange = (k: string, v: string) =>
+    setForm((p) => ({ ...p, [k]: v }));
 
   useEffect(() => {
     (async () => {
@@ -61,7 +74,43 @@ export default function AdminUserEditPage() {
       });
       if (file) fd.append("profilePicture", file);
 
-      await adminUpdateUser(id as string, fd);
+      // ✅ IMPORTANT: use response so we can sync cookie if needed
+      const res = await adminUpdateUser(id as string, fd);
+
+      // Your APIs sometimes return: { success, data: {...} } OR { data: {...} }
+      const updated =
+        res?.data?.data || res?.data || null;
+
+      // ✅ If admin updated THEIR OWN profile, refresh cookie for header
+      const updatedId = updated?._id || updated?.id;
+      const loggedInId = (authUser as any)?._id || (authUser as any)?.id;
+
+      if (updatedId && loggedInId && String(updatedId) === String(loggedInId)) {
+        const currentRaw = Cookies.get(COOKIE_KEY);
+        const current = currentRaw ? JSON.parse(currentRaw) : {};
+
+        const filename = updated?.profile_picture as string | null | undefined;
+        const photo = filename ? profileUrl(filename) : current?.profilePicture;
+
+        Cookies.set(
+          COOKIE_KEY,
+          JSON.stringify({
+            ...current,
+            _id: updated?._id ?? current?._id,
+            id: updated?.id ?? current?.id,
+            name: updated?.fullName ?? updated?.name ?? current?.name,
+            fullName: updated?.fullName ?? current?.fullName,
+            email: updated?.email ?? current?.email,
+            role: updated?.role ?? current?.role,
+            profile_picture: filename ?? current?.profile_picture ?? null,
+            profilePicture: photo ?? null,
+          }),
+          { path: "/" }
+        );
+
+        // ✅ triggers AdminHeader to re-read cookie photo
+        window.dispatchEvent(new Event(USER_UPDATED_EVENT));
+      }
 
       alert("Updated ✅");
       router.push("/admin/users");
@@ -237,8 +286,8 @@ export default function AdminUserEditPage() {
           </Button>
 
           <p className="mt-1 text-xs text-slate-500">
-  This action permanently removes the user from the system.
-</p>
+            This action permanently removes the user from the system.
+          </p>
         </div>
       </div>
     </div>

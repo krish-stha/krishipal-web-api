@@ -52,6 +52,34 @@ const csvEscape = (v: any) => {
   return s;
 };
 
+// ✅ added only for avatar rendering (does NOT change other functionality)
+const BACKEND_URL =
+  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+
+function normalizePhotoUrl(photo: string | null): string | null {
+  if (!photo) return null;
+
+  if (photo.startsWith("http://") || photo.startsWith("https://")) return photo;
+
+  // filename only -> /public/profile_photo/<filename>
+  if (!photo.includes("/")) return `${BACKEND_URL}/public/profile_photo/${photo}`;
+
+  if (photo.startsWith("public/")) return `${BACKEND_URL}/${photo}`;
+  if (photo.startsWith("/public/")) return `${BACKEND_URL}${photo}`;
+
+  if (photo.startsWith("profile_photo/")) return `${BACKEND_URL}/public/${photo}`;
+  if (photo.startsWith("/profile_photo/")) return `${BACKEND_URL}/public${photo}`;
+
+  if (!photo.startsWith("/")) return `${BACKEND_URL}/${photo}`;
+  return `${BACKEND_URL}${photo}`;
+}
+
+function withCacheBust(url: string | null): string | null {
+  if (!url) return null;
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}t=${Date.now()}`;
+}
+
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -114,8 +142,8 @@ export default function AdminUsersPage() {
         role === "all"
           ? true
           : role === "admin"
-            ? u.role === "admin"
-            : u.role !== "admin";
+          ? u.role === "admin"
+          : u.role !== "admin";
 
       if (!roleOk) return false;
       if (!query) return true;
@@ -213,7 +241,9 @@ export default function AdminUsersPage() {
       ),
     ];
 
-    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const blob = new Blob([lines.join("\n")], {
+      type: "text/csv;charset=utf-8;",
+    });
     const url = URL.createObjectURL(blob);
 
     const a = document.createElement("a");
@@ -257,7 +287,12 @@ export default function AdminUsersPage() {
         </div>
 
         <div className="flex gap-2">
-          <Button variant="outline" className="gap-2" onClick={exportCsv} disabled={loading || !!error || totalItems === 0}>
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={exportCsv}
+            disabled={loading || !!error || totalItems === 0}
+          >
             <Download className="h-4 w-4" />
             Export CSV
           </Button>
@@ -410,7 +445,6 @@ export default function AdminUsersPage() {
                     <th className="px-4 py-3">User</th>
                     <th className="px-4 py-3">Email</th>
                     <th className="px-4 py-3">Role</th>
-                    {/* hide Created on very small screens */}
                     <th className="px-4 py-3 hidden sm:table-cell">
                       <span className="inline-flex items-center gap-2">
                         <Calendar className="h-4 w-4" />
@@ -423,16 +457,39 @@ export default function AdminUsersPage() {
 
                 <tbody className="divide-y">
                   {paged.map((u) => {
-                    const initial = (u.fullName?.trim()?.[0] || u.email?.[0] || "U").toUpperCase();
+                    const initial = (
+                      u.fullName?.trim()?.[0] ||
+                      u.email?.[0] ||
+                      "U"
+                    ).toUpperCase();
+
                     const isAdmin = u.role === "admin";
+
+                    // ✅ ONLY change: use profile_picture if available
+                    const photoUrl = withCacheBust(
+                      normalizePhotoUrl(u.profile_picture || null)
+                    );
 
                     return (
                       <tr key={u._id} className="hover:bg-slate-50/70">
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
-                            <div className="h-9 w-9 rounded-full bg-green-50 ring-1 ring-green-100 flex items-center justify-center font-semibold text-green-800">
-                              {initial}
+                            <div className="h-9 w-9 rounded-full overflow-hidden bg-green-50 ring-1 ring-green-100 flex items-center justify-center font-semibold text-green-800">
+                              {photoUrl ? (
+                                <img
+                                  src={photoUrl}
+                                  alt="Profile"
+                                  className="h-full w-full object-cover"
+                                  onError={(e) => {
+                                    // fallback to letter if image missing
+                                    e.currentTarget.src = "";
+                                  }}
+                                />
+                              ) : (
+                                initial
+                              )}
                             </div>
+
                             <div>
                               <div className="font-medium text-slate-900">
                                 {u.fullName || "—"}
@@ -487,7 +544,10 @@ export default function AdminUsersPage() {
 
                   {!paged.length && (
                     <tr>
-                      <td colSpan={5} className="px-4 py-10 text-center text-slate-500">
+                      <td
+                        colSpan={5}
+                        className="px-4 py-10 text-center text-slate-500"
+                      >
                         No users match your filters.
                       </td>
                     </tr>
