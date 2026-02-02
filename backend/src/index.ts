@@ -2,28 +2,35 @@ import express from "express";
 import cors from "cors";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
+import path from "path";
 
 import authRoutes from "./routes/auth.route";
-import addressBatchRoutes from "./routes/address_batch_route"; // ✅ import your batch routes
+import addressBatchRoutes from "./routes/address_batch_route";
 import { errorHandler } from "./middleware/error.middleware";
+import adminUserRoutes from "./routes/admin.user.route";
 
 dotenv.config();
 
 const app = express();
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 
-// Routes
+// Serve public folder
+app.use("/public", express.static(path.join(process.cwd(), "public")));
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+
+
 app.use("/api/auth", authRoutes);
-app.use("/api/batches", addressBatchRoutes); // ✅ match frontend helpers
+app.use("/api/batches", addressBatchRoutes);
 
-// Global Error Handler
-app.use(errorHandler); // optional but recommended
 
-// Start server
+app.use("/api/admin", adminUserRoutes);
+
+app.use(errorHandler);
+
 const PORT = process.env.PORT || 5000;
+
 mongoose
   .connect(process.env.MONGO_URI!)
   .then(() => {

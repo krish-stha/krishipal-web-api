@@ -1,8 +1,8 @@
 import Link from "next/link"
 import Image from "next/image"
-import { Header } from "./auth/user/component/header"
+import { Header } from "./user/component/header"
 import { Button } from "./auth/components/ui/button"
-import { Footer } from "./auth/user/component/footer"
+import { Footer } from "./user/component/footer"
 
 
 
