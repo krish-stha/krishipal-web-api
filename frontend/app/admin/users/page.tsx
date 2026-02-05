@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/app/auth/components/ui/button";
-import { adminListUsers } from "@/lib/api/admin/user";
+import { adminListUsers, adminSoftDeleteUser } from "@/lib/api/admin/user";
 import {
   Users,
   Plus,
@@ -16,6 +16,7 @@ import {
   ChevronRight,
   ArrowUpDown,
   Download,
+  Trash2,
 } from "lucide-react";
 
 type RoleFilter = "all" | "admin" | "user";
@@ -53,8 +54,7 @@ const csvEscape = (v: any) => {
 };
 
 // ✅ added only for avatar rendering (does NOT change other functionality)
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
 
 function normalizePhotoUrl(photo: string | null): string | null {
   if (!photo) return null;
@@ -80,60 +80,107 @@ function withCacheBust(url: string | null): string | null {
   return `${url}${sep}t=${Date.now()}`;
 }
 
+type Meta = {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  hasNextPage?: boolean;
+  hasPrevPage?: boolean;
+};
+
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<any[]>([]);
+  const [meta, setMeta] = useState<Meta>({
+    total: 0,
+    page: 1,
+    limit: 10,
+    totalPages: 1,
+  });
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Filters
+  // Filters (client-side on current page)
   const [q, setQ] = useState("");
   const [role, setRole] = useState<RoleFilter>("all");
 
-  // Sorting
+  // Sorting (client-side on current page)
   const [sort, setSort] = useState<SortKey>("created_desc");
 
-  // Pagination
+  // Backend Pagination
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
+  const fetchUsers = async (p = page, l = pageSize) => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      // ✅ NEW: request backend pagination
+      const res = await adminListUsers({ page: p, limit: l });
+
+      const list = Array.isArray(res.data) ? res.data : [];
+const m = res.meta ?? null;
+
+setUsers(list);
+
+      // backend meta exists when page/limit used
+      if (m) {
+        setMeta({
+          total: m.total ?? 0,
+          page: m.page ?? p,
+          limit: m.limit ?? l,
+          totalPages: m.totalPages ?? 1,
+          hasNextPage: m.hasNextPage,
+          hasPrevPage: m.hasPrevPage,
+        });
+      } else {
+        // fallback if API still returns non-paginated
+        setMeta({
+          total: list.length,
+          page: p,
+          limit: l,
+          totalPages: Math.max(1, Math.ceil(list.length / l)),
+        });
+      }
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || e?.message || "Unable to load users";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ✅ Fetch when page or pageSize changes (server pagination)
   useEffect(() => {
     let mounted = true;
 
     (async () => {
-      setLoading(true);
-      setError(null);
-
-      try {
-        const res = await adminListUsers();
-        if (!mounted) return;
-        setUsers(res?.data || []);
-      } catch (e: any) {
-        if (!mounted) return;
-        const msg =
-          e?.response?.data?.message || e?.message || "Unable to load users";
-        setError(msg);
-      } finally {
-        if (mounted) setLoading(false);
-      }
+      if (!mounted) return;
+      await fetchUsers(page, pageSize);
     })();
 
     return () => {
       mounted = false;
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, pageSize]);
 
   // reset to page 1 when filters/sort/pageSize change
   useEffect(() => {
     setPage(1);
   }, [q, role, sort, pageSize]);
 
+  // Stats (total is from backend; role split is from current page)
   const stats = useMemo(() => {
-    const total = users.length;
-    const admins = users.filter((u) => u.role === "admin").length;
-    const normal = users.filter((u) => u.role !== "admin").length;
-    return { total, admins, normal };
-  }, [users]);
+    const total = meta.total;
+    const adminsOnPage = users.filter((u) => u.role === "admin").length;
+    const usersOnPage = users.filter((u) => u.role !== "admin").length;
+    return { total, adminsOnPage, usersOnPage };
+  }, [users, meta.total]);
 
+  // Filter + Sort on current page only (still useful UX)
   const filteredAndSorted = useMemo(() => {
     const query = q.trim().toLowerCase();
 
@@ -148,11 +195,7 @@ export default function AdminUsersPage() {
       if (!roleOk) return false;
       if (!query) return true;
 
-      const hay = [u.fullName, u.email, u._id]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-
+      const hay = [u.fullName, u.email, u._id].filter(Boolean).join(" ").toLowerCase();
       return hay.includes(query);
     });
 
@@ -186,21 +229,16 @@ export default function AdminUsersPage() {
     return sorted;
   }, [users, q, role, sort]);
 
-  const totalItems = filteredAndSorted.length;
-  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const totalPages = Math.max(1, meta.totalPages || 1);
   const safePage = Math.min(page, totalPages);
 
-  const paged = useMemo(() => {
-    const start = (safePage - 1) * pageSize;
-    return filteredAndSorted.slice(start, start + pageSize);
-  }, [filteredAndSorted, safePage, pageSize]);
-
   const range = useMemo(() => {
+    const totalItems = meta.total ?? 0;
     if (!totalItems) return { from: 0, to: 0 };
     const from = (safePage - 1) * pageSize + 1;
     const to = Math.min(safePage * pageSize, totalItems);
     return { from, to };
-  }, [safePage, pageSize, totalItems]);
+  }, [safePage, pageSize, meta.total]);
 
   const pageButtons = useMemo(() => {
     const maxButtons = 5;
@@ -224,7 +262,7 @@ export default function AdminUsersPage() {
   }, [safePage, totalPages]);
 
   const exportCsv = () => {
-    // export filtered+sorted set (not only current page) => professional
+    // exports CURRENT PAGE (already server paginated)
     const rows = filteredAndSorted.map((u) => ({
       id: u._id ?? "",
       name: u.fullName ?? "",
@@ -236,23 +274,40 @@ export default function AdminUsersPage() {
     const header = ["ID", "Name", "Email", "Role", "Created"];
     const lines = [
       header.join(","),
-      ...rows.map((r) =>
-        [r.id, r.name, r.email, r.role, r.created].map(csvEscape).join(",")
-      ),
+      ...rows.map((r) => [r.id, r.name, r.email, r.role, r.created].map(csvEscape).join(",")),
     ];
 
-    const blob = new Blob([lines.join("\n")], {
-      type: "text/csv;charset=utf-8;",
-    });
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
 
     const a = document.createElement("a");
     a.href = url;
-    a.download = "users.csv";
+    a.download = "users_page.csv";
     document.body.appendChild(a);
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
+  };
+
+  const handleDeleteFromList = async (userId: string) => {
+    if (!confirm("Are you sure you want to delete this user?")) return;
+
+    try {
+      await adminSoftDeleteUser(userId);
+
+      // Refetch current page after delete.
+      // If last item deleted on page and page > 1, go back one page.
+      const willBeEmpty = users.length === 1 && page > 1;
+      if (willBeEmpty) {
+        setPage((p) => Math.max(1, p - 1));
+      } else {
+        await fetchUsers(page, pageSize);
+      }
+
+      alert("User deleted ✅");
+    } catch (e: any) {
+      alert(e?.response?.data?.message || e?.message || "Delete failed");
+    }
   };
 
   return (
@@ -260,15 +315,11 @@ export default function AdminUsersPage() {
       {/* Header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
-          <div className="text-xs font-semibold tracking-wide text-slate-500">
-            USER ADMINISTRATION
-          </div>
+          <div className="text-xs font-semibold tracking-wide text-slate-500">USER ADMINISTRATION</div>
 
           <h1 className="mt-2 text-2xl font-semibold text-slate-900">Users</h1>
 
-          <p className="mt-1 text-sm text-slate-500">
-            Manage accounts, roles, and access privileges.
-          </p>
+          <p className="mt-1 text-sm text-slate-500">Manage accounts, roles, and access privileges.</p>
 
           <div className="mt-4 flex flex-wrap gap-2">
             <div className="inline-flex items-center gap-2 rounded-full border bg-white px-3 py-1 text-sm text-slate-700">
@@ -277,11 +328,11 @@ export default function AdminUsersPage() {
             </div>
             <div className="inline-flex items-center gap-2 rounded-full border bg-white px-3 py-1 text-sm text-slate-700">
               <Shield className="h-4 w-4 text-green-700" />
-              Admins: <b className="text-slate-900">{stats.admins}</b>
+              Admins (this page): <b className="text-slate-900">{stats.adminsOnPage}</b>
             </div>
             <div className="inline-flex items-center gap-2 rounded-full border bg-white px-3 py-1 text-sm text-slate-700">
               <UserIcon className="h-4 w-4 text-green-700" />
-              Users: <b className="text-slate-900">{stats.normal}</b>
+              Users (this page): <b className="text-slate-900">{stats.usersOnPage}</b>
             </div>
           </div>
         </div>
@@ -291,10 +342,10 @@ export default function AdminUsersPage() {
             variant="outline"
             className="gap-2"
             onClick={exportCsv}
-            disabled={loading || !!error || totalItems === 0}
+            disabled={loading || !!error || filteredAndSorted.length === 0}
           >
             <Download className="h-4 w-4" />
-            Export CSV
+            Export CSV (page)
           </Button>
 
           <Link href="/admin/users/create">
@@ -314,7 +365,7 @@ export default function AdminUsersPage() {
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search by name, email, or ID..."
+              placeholder="Search (current page) by name, email, or ID..."
               className="w-full rounded-xl border bg-white pl-9 pr-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-green-200"
             />
           </div>
@@ -372,26 +423,20 @@ export default function AdminUsersPage() {
       {/* Content */}
       <div className="mt-5">
         {loading && (
-          <div className="rounded-2xl border bg-slate-50 p-6 text-slate-600">
-            Loading users...
-          </div>
+          <div className="rounded-2xl border bg-slate-50 p-6 text-slate-600">Loading users...</div>
         )}
 
         {!loading && error && (
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-red-700">
-            {error}
-          </div>
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-red-700">{error}</div>
         )}
 
         {!loading && !error && (
           <div className="overflow-hidden rounded-2xl border">
             <div className="border-b bg-white px-4 py-3 flex items-center justify-between">
               <div>
-                <div className="text-sm font-semibold text-slate-900">
-                  User Directory
-                </div>
+                <div className="text-sm font-semibold text-slate-900">User Directory</div>
                 <div className="text-xs text-slate-500">
-                  Showing {range.from}–{range.to} of {totalItems}
+                  Showing {range.from}–{range.to} of {meta.total}
                 </div>
               </div>
 
@@ -456,19 +501,11 @@ export default function AdminUsersPage() {
                 </thead>
 
                 <tbody className="divide-y">
-                  {paged.map((u) => {
-                    const initial = (
-                      u.fullName?.trim()?.[0] ||
-                      u.email?.[0] ||
-                      "U"
-                    ).toUpperCase();
-
+                  {filteredAndSorted.map((u) => {
+                    const initial = (u.fullName?.trim()?.[0] || u.email?.[0] || "U").toUpperCase();
                     const isAdmin = u.role === "admin";
 
-                    // ✅ ONLY change: use profile_picture if available
-                    const photoUrl = withCacheBust(
-                      normalizePhotoUrl(u.profile_picture || null)
-                    );
+                    const photoUrl = withCacheBust(normalizePhotoUrl(u.profile_picture || null));
 
                     return (
                       <tr key={u._id} className="hover:bg-slate-50/70">
@@ -481,7 +518,6 @@ export default function AdminUsersPage() {
                                   alt="Profile"
                                   className="h-full w-full object-cover"
                                   onError={(e) => {
-                                    // fallback to letter if image missing
                                     e.currentTarget.src = "";
                                   }}
                                 />
@@ -491,19 +527,13 @@ export default function AdminUsersPage() {
                             </div>
 
                             <div>
-                              <div className="font-medium text-slate-900">
-                                {u.fullName || "—"}
-                              </div>
-                              <div className="text-xs text-slate-500 font-mono">
-                                {u._id}
-                              </div>
+                              <div className="font-medium text-slate-900">{u.fullName || "—"}</div>
+                              <div className="text-xs text-slate-500 font-mono">{u._id}</div>
                             </div>
                           </div>
                         </td>
 
-                        <td className="px-4 py-3 text-sm text-slate-700">
-                          {u.email}
-                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-700">{u.email}</td>
 
                         <td className="px-4 py-3">
                           <span
@@ -536,19 +566,26 @@ export default function AdminUsersPage() {
                             >
                               Edit
                             </Link>
+
+                            {/* ✅ Professor requirement: delete button in table with confirm */}
+                            <button
+                              onClick={() => handleDeleteFromList(u._id)}
+                              className="inline-flex items-center gap-1 font-medium text-red-600 hover:text-red-700"
+                              title="Delete user"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              Delete
+                            </button>
                           </div>
                         </td>
                       </tr>
                     );
                   })}
 
-                  {!paged.length && (
+                  {!filteredAndSorted.length && (
                     <tr>
-                      <td
-                        colSpan={5}
-                        className="px-4 py-10 text-center text-slate-500"
-                      >
-                        No users match your filters.
+                      <td colSpan={5} className="px-4 py-10 text-center text-slate-500">
+                        No users match your filters (current page).
                       </td>
                     </tr>
                   )}
