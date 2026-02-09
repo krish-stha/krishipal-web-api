@@ -1,63 +1,76 @@
 import mongoose, { Schema, Document } from "mongoose";
 import { UserType } from "../types/user.type";
 
-export interface IUser extends UserType, Document {}
+export interface IUser extends UserType, Document {
+  reset_password_token?: string | null;
+  reset_password_expires_at?: Date | null;
+}
 
 const UserSchema = new Schema<IUser>(
   {
     fullName: {
       type: String,
       required: true,
-      trim: true
+      trim: true,
     },
 
     email: {
       type: String,
       required: true,
       unique: true,
-      lowercase: true
+      lowercase: true,
     },
 
     countryCode: {
       type: String,
-      required: true
+      required: true,
     },
 
     phone: {
       type: String,
-      required: true
+      required: true,
     },
 
     address: {
       type: String,
-      required: true
+      required: true,
     },
 
     password: {
       type: String,
-      required: true
+      required: true,
     },
 
     role: {
       type: String,
       enum: ["user", "admin"],
-      default: "user"
+      default: "user",
     },
-
 
     profile_picture: {
       type: String,
-      default: null
+      default: null,
     },
 
+    // ✅ NEW: reset password fields
+    reset_password_token: {
+      type: String,
+      default: null,
+      index: true,
+    },
+    reset_password_expires_at: {
+      type: Date,
+      default: null,
+      index: true,
+    },
 
     deleted_at: {
       type: Date,
-      default: null
-    }
+      default: null,
+    },
   },
   {
-    timestamps: true // createdAt, updatedAt
+    timestamps: true, // createdAt, updatedAt
   }
 );
 

@@ -7,12 +7,15 @@ export const endpoints = {
     me: "/auth/me",
     update: (id: string) => `/auth/${id}`,
     uploadProfilePicture: "/auth/upload-profile-picture",
+
+    forgotPassword: "/auth/forgot-password",
+    resetPassword: "/auth/reset-password",
   },
 
   admin: {
     users: "/admin/users",
     userById: (id: string) => `/admin/users/${id}`,
-    softDelete: (id: string) => `/admin/users/${id}`,      // ✅ readability
+    softDelete: (id: string) => `/admin/users/${id}`,
     hardDelete: (id: string) => `/admin/users/${id}/hard`,
   },
 };

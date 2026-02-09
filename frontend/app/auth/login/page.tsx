@@ -132,9 +132,12 @@ export default function LoginPage() {
               <span className="text-gray-500">or</span>
             </div>
 
-            <Button type="button" variant="outline" className="w-full py-6 bg-transparent">
-              Continue with Google
-            </Button>
+           <div className="text-right">
+  <Link href="/auth/forgot-password" className="text-green-600 hover:underline text-sm font-medium">
+    Forgot password?
+  </Link>
+</div>
+
           </form>
 
           <p className="text-center mt-8 text-gray-600">

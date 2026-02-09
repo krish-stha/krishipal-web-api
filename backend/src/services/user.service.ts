@@ -1,9 +1,12 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 import { JWT_SECRET } from "../config";
 import { HttpError } from "../errors/http-error";
 import { UserRepository } from "../repositories/user.repository";
 import { CreateUserDTO, LoginUserDTO, UpdateUserDTO } from "../dtos/user.dto";
+import { UserModel } from "../models/user.model";
+import { sendResetEmail } from "./mail.service";
 
 const userRepo = new UserRepository();
 
@@ -51,7 +54,6 @@ export class UserService {
     return user;
   }
 
-  // ✅ ADD THIS BACK (for POST /upload-profile-picture)
   async setProfilePicture(userId: string, filename: string) {
     const updated = await userRepo.updateProfilePicture(userId, filename);
     if (!updated) throw new HttpError(404, "User not found");
@@ -79,5 +81,52 @@ export class UserService {
     const updated = await userRepo.updateById(userId, payload);
     if (!updated) throw new HttpError(404, "User not found");
     return updated;
+  }
+
+  // ✅ NEW: Forgot password
+  // - Always returns success (even if email not found) to avoid user enumeration
+  // - Stores token + expiry in DB
+  async forgotPassword(email: string) {
+  const user = await UserModel.findOne({
+    email: email.toLowerCase(),
+    deleted_at: null,
+  });
+
+  if (!user) {
+    return { message: "If your email exists, a reset link has been sent." };
+  }
+
+  const rawToken = crypto.randomBytes(32).toString("hex");
+  const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+
+  user.reset_password_token = tokenHash;
+  user.reset_password_expires_at = new Date(Date.now() + 1000 * 60 * 15);
+  await user.save();
+
+  const resetLink = `${process.env.FRONTEND_URL}/auth/reset-password?token=${rawToken}`;
+
+  await sendResetEmail(user.email, resetLink);
+
+  return { message: "Reset email sent successfully." };
+}
+
+  // ✅ NEW: Reset password
+  async resetPassword(token: string, newPassword: string) {
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+
+    const user = await UserModel.findOne({
+      reset_password_token: tokenHash,
+      reset_password_expires_at: { $gt: new Date() },
+      deleted_at: null,
+    });
+
+    if (!user) throw new HttpError(400, "Invalid or expired reset token");
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    user.reset_password_token = null;
+    user.reset_password_expires_at = null;
+    await user.save();
+
+    return { message: "Password reset successful" };
   }
 }

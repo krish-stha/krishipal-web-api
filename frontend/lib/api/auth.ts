@@ -20,7 +20,6 @@ export async function loginApi(email: string, password: string) {
 
   const data = res.data;
 
-  // normalize user shape
   const userData = {
     id: data.user._id || data.user.id || "",
     email: data.user.email,
@@ -28,8 +27,19 @@ export async function loginApi(email: string, password: string) {
     role: data.user.role,
   };
 
-  // save cookies
   setAuthCookies(userData, data.token);
 
-  return userData; // return user for AuthContext
+  return userData;
+}
+
+// ✅ NEW: forgot password
+export async function forgotPasswordApi(email: string) {
+  const res = await api.post(endpoints.auth.forgotPassword, { email });
+  return res.data; // { success: true, message: "..." }
+}
+
+// ✅ NEW: reset password
+export async function resetPasswordApi(token: string, password: string) {
+  const res = await api.post(endpoints.auth.resetPassword, { token, password });
+  return res.data; // { success: true, message: "..." }
 }
