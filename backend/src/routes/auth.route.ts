@@ -4,13 +4,32 @@ import { protect } from "../middleware/auth.middleware";
 import { uploadProfilePicture } from "../middleware/upload";
 import { asyncHandler } from "../middleware/async.middleware";
 import { multerErrorHandler } from "../middleware/multer_error.middleware";
+import { validateStrongPassword } from "../middleware/validatePassword.middleware";
 const router = Router();
 const controller = new AuthController();
 
-router.post("/register", asyncHandler(controller.register.bind(controller)));
+
+router.post(
+  "/register",
+  validateStrongPassword,
+  asyncHandler(controller.register.bind(controller))
+);
+
 router.post("/login", asyncHandler(controller.login.bind(controller)));
 
+router.post("/forgot-password", asyncHandler(controller.forgotPassword.bind(controller)));
+
+router.post(
+  "/reset-password",
+  validateStrongPassword,
+  asyncHandler(controller.resetPassword.bind(controller))
+);
+
+
+
 router.get("/me", protect, asyncHandler(controller.me.bind(controller)));
+
+
 
 router.post(
   "/upload-profile-picture",

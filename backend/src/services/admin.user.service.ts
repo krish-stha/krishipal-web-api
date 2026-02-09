@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import { HttpError } from "../errors/http-error";
 import { UserRepository } from "../repositories/user.repository";
 import { AdminCreateUserDTO, AdminUpdateUserDTO } from "../dtos/admin.user.dto";
+import { UserModel } from "../models/user.model";
 
 const userRepo = new UserRepository();
 
@@ -25,9 +26,13 @@ export class AdminUserService {
     });
   }
 
-  async getUsers() {
-    return userRepo.listAll();
-  }
+async getUsers() {
+  return UserModel.find({ deleted_at: null })
+    .sort({ createdAt: -1 })
+    .select("-password")
+    .lean();
+}
+
 
   async getUserById(id: string) {
     const user = await userRepo.getById(id);
@@ -65,4 +70,33 @@ async hardDeleteUser(id: string) {
   return deleted;
 }
 
+async getUsersPaginated(page: number, limit: number) {
+    const filter = { deleted_at: null };
+
+    const skip = (page - 1) * limit;
+
+    const [total, users] = await Promise.all([
+      UserModel.countDocuments(filter),
+      UserModel.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .select("-password") // ✅ never send password to frontend
+        .lean(),
+    ]);
+
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+
+    return {
+      data: users,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
+    };
+  }
 }

@@ -6,6 +6,15 @@ import { AuthRequest } from "../middleware/auth.middleware";
 
 const userService = new UserService();
 
+const ForgotPasswordDTO = z.object({
+  email: z.string().email(),
+});
+
+const ResetPasswordDTO = z.object({
+  token: z.string().min(10),
+  password: z.string().min(6),
+});
+
 export class AuthController {
   async register(req: Request, res: Response) {
     const parsed = CreateUserDTO.safeParse(req.body);
@@ -35,6 +44,34 @@ export class AuthController {
     res.status(200).json({ success: true, ...result });
   }
 
+  // ✅ NEW: POST /api/auth/forgot-password
+  async forgotPassword(req: Request, res: Response) {
+    const parsed = ForgotPasswordDTO.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        errors: z.prettifyError(parsed.error),
+      });
+    }
+
+    const result = await userService.forgotPassword(parsed.data.email);
+    return res.status(200).json({ success: true, ...result });
+  }
+
+  // ✅ NEW: POST /api/auth/reset-password
+  async resetPassword(req: Request, res: Response) {
+    const parsed = ResetPasswordDTO.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        errors: z.prettifyError(parsed.error),
+      });
+    }
+
+    const result = await userService.resetPassword(parsed.data.token, parsed.data.password);
+    return res.status(200).json({ success: true, ...result });
+  }
+
   // GET /api/auth/me
   async me(req: AuthRequest, res: Response) {
     const userId = req.user?.id;
@@ -53,7 +90,6 @@ export class AuthController {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
-    // multer attaches file here
     const file = (req as any).file as Express.Multer.File | undefined;
     if (!file) {
       return res.status(400).json({ success: false, message: "Please upload a photo file" });
@@ -71,10 +107,8 @@ export class AuthController {
     });
   }
 
-    // PUT /api/auth/:id (multer) - update user profile
-    // PUT /api/auth/:id  (update own profile, admin can update anyone)
+  // PUT /api/auth/:id
   async updateProfile(req: AuthRequest, res: Response) {
-    
     const loggedUser = req.user;
     if (!loggedUser) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
@@ -82,22 +116,15 @@ export class AuthController {
 
     const paramId = req.params.id;
 
-    // only self OR admin
     if (loggedUser.id !== paramId && loggedUser.role !== "admin") {
       return res.status(403).json({ success: false, message: "Forbidden" });
     }
 
     const file = (req as any).file as Express.Multer.File | undefined;
-    console.log("REQ.FILE =", file);
-console.log("SAVED PATH =", file?.path);
-console.log("DEST =", file?.destination);
-
     const profileFilename = file?.filename ?? null;
 
     const updated = await userService.updateProfileById(paramId, req.body, profileFilename);
 
     return res.status(200).json({ success: true, data: updated, message: "Profile updated" });
   }
-
-
 }
