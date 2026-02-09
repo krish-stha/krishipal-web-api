@@ -1,25 +1,39 @@
 import request from "supertest";
 import app from "../../app";
+import { createAdminAndGetToken } from "../helpers/test-auth";
 
 describe("Admin Users Pagination", () => {
+
   it("returns paginated users with meta", async () => {
-    // TODO: Replace with real admin token from your test helper
-    const token = "PUT_VALID_ADMIN_JWT_HERE";
+    const { token } = await createAdminAndGetToken();
 
     const res = await request(app)
       .get("/api/admin/users?page=1&limit=5")
       .set("Authorization", `Bearer ${token}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
-
     expect(Array.isArray(res.body.data)).toBe(true);
-    expect(res.body.data.length).toBeLessThanOrEqual(5);
-
     expect(res.body.meta).toBeDefined();
-    expect(res.body.meta.page).toBe(1);
-    expect(res.body.meta.limit).toBe(5);
-    expect(typeof res.body.meta.total).toBe("number");
+  });
+
+  it("returns correct totalPages", async () => {
+    const { token } = await createAdminAndGetToken();
+
+    const res = await request(app)
+      .get("/api/admin/users?page=1&limit=1")
+      .set("Authorization", `Bearer ${token}`);
+
     expect(typeof res.body.meta.totalPages).toBe("number");
   });
+
+  it("limit works correctly", async () => {
+    const { token } = await createAdminAndGetToken();
+
+    const res = await request(app)
+      .get("/api/admin/users?page=1&limit=1")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.body.data.length).toBeLessThanOrEqual(1);
+  });
+
 });

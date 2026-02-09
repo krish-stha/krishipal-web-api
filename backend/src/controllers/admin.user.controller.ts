@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import z from "zod";
+import mongoose from "mongoose";
 import { AdminUserService } from "../services/admin.user.service";
 import { AdminCreateUserDTO, AdminUpdateUserDTO } from "../dtos/admin.user.dto";
 
@@ -21,6 +22,10 @@ const ListQuerySchema = z.object({
       message: "limit must be a positive integer",
     }),
 });
+
+function validateObjectId(id: string) {
+  return mongoose.Types.ObjectId.isValid(id);
+}
 
 export class AdminUserController {
   async create(req: Request, res: Response) {
@@ -74,11 +79,29 @@ export class AdminUserController {
   }
 
   async getById(req: Request, res: Response) {
-    const user = await adminService.getUserById(req.params.id);
+    const { id } = req.params;
+
+    if (!validateObjectId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user id format",
+      });
+    }
+
+    const user = await adminService.getUserById(id);
     return res.status(200).json({ success: true, data: user });
   }
 
   async update(req: Request, res: Response) {
+    const { id } = req.params;
+
+    if (!validateObjectId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user id format",
+      });
+    }
+
     const parsed = AdminUpdateUserDTO.safeParse(req.body);
     if (!parsed.success) {
       return res
@@ -89,13 +112,22 @@ export class AdminUserController {
     const file = (req as any).file as Express.Multer.File | undefined;
     const filename = file?.filename ?? null;
 
-    const updated = await adminService.updateUser(req.params.id, parsed.data, filename);
+    const updated = await adminService.updateUser(id, parsed.data, filename);
     return res.status(200).json({ success: true, data: updated });
   }
 
   // DELETE /api/admin/users/:id  (SOFT)
   async remove(req: Request, res: Response) {
-    const updated = await adminService.softDeleteUser(req.params.id);
+    const { id } = req.params;
+
+    if (!validateObjectId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user id format",
+      });
+    }
+
+    const updated = await adminService.softDeleteUser(id);
     return res
       .status(200)
       .json({ success: true, data: updated, message: "User soft deleted" });
@@ -103,7 +135,16 @@ export class AdminUserController {
 
   // DELETE /api/admin/users/:id/hard  (HARD)
   async hardRemove(req: Request, res: Response) {
-    const deleted = await adminService.hardDeleteUser(req.params.id);
+    const { id } = req.params;
+
+    if (!validateObjectId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user id format",
+      });
+    }
+
+    const deleted = await adminService.hardDeleteUser(id);
     return res
       .status(200)
       .json({ success: true, data: deleted, message: "User hard deleted" });
