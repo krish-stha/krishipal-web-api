@@ -11,16 +11,31 @@ function mustUserId(req: AuthRequest) {
   return userId;
 }
 
+function effectivePrice(p: any): number {
+  const d = p?.discountPrice;
+  if (d !== null && d !== undefined && Number(d) >= 0) return Number(d);
+  return Number(p?.price || 0);
+}
+
+const cartPopulate = {
+  path: "items.product",
+  select: "name slug sku price discountPrice stock images category status deleted_at",
+  populate: { path: "category", select: "name slug" },
+};
+
 export class CartController {
   // GET /api/cart
   async getMyCart(req: AuthRequest, res: Response) {
     const userId = mustUserId(req);
 
     const cart = await CartModel.findOne({ user: userId })
-      .populate("items.product")
+      .populate(cartPopulate)
       .lean();
 
-    return res.status(200).json({ success: true, data: cart ?? { user: userId, items: [] } });
+    return res.status(200).json({
+      success: true,
+      data: cart ?? { user: userId, items: [] },
+    });
   }
 
   // POST /api/cart/items  { productId, qty }
@@ -49,24 +64,36 @@ export class CartController {
       throw new HttpError(400, "Insufficient stock");
     }
 
-    // 1) increment qty if exists (IMPORTANT: arrayFilters fixes your crash)
+    // ✅ snapshot price at time of add
+    const priceSnapshot = effectivePrice(product);
+
+    // 1) If exists -> increment qty (no need to touch priceSnapshot)
     const inc = await CartModel.findOneAndUpdate(
       { user: userId, "items.product": productId },
       { $inc: { "items.$[i].qty": addQty } },
       {
         new: true,
+        runValidators: true,
         arrayFilters: [{ "i.product": new mongoose.Types.ObjectId(productId) }],
       }
-    ).populate("items.product");
+    ).populate(cartPopulate);
 
     if (inc) return res.status(200).json({ success: true, data: inc });
 
-    // 2) push new item (create cart if missing)
+    // 2) Else push new item (✅ include priceSnapshot!)
     const pushed = await CartModel.findOneAndUpdate(
       { user: userId },
-      { $push: { items: { product: productId, qty: addQty } } },
-      { new: true, upsert: true }
-    ).populate("items.product");
+      {
+        $push: {
+          items: {
+            product: productId,
+            qty: addQty,
+            priceSnapshot,
+          },
+        },
+      },
+      { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true }
+    ).populate(cartPopulate);
 
     return res.status(200).json({ success: true, data: pushed });
   }
@@ -103,9 +130,10 @@ export class CartController {
       { $set: { "items.$[i].qty": nextQty } },
       {
         new: true,
+        runValidators: true,
         arrayFilters: [{ "i.product": new mongoose.Types.ObjectId(productId) }],
       }
-    ).populate("items.product");
+    ).populate(cartPopulate);
 
     if (!updated) throw new HttpError(404, "Item not found in cart");
 
@@ -124,10 +152,13 @@ export class CartController {
     const updated = await CartModel.findOneAndUpdate(
       { user: userId },
       { $pull: { items: { product: productId } } },
-      { new: true }
-    ).populate("items.product");
+      { new: true, runValidators: true }
+    ).populate(cartPopulate);
 
-    return res.status(200).json({ success: true, data: updated ?? { user: userId, items: [] } });
+    return res.status(200).json({
+      success: true,
+      data: updated ?? { user: userId, items: [] },
+    });
   }
 
   // DELETE /api/cart
@@ -137,8 +168,8 @@ export class CartController {
     const updated = await CartModel.findOneAndUpdate(
       { user: userId },
       { $set: { items: [] } },
-      { new: true, upsert: true }
-    ).populate("items.product");
+      { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true }
+    ).populate(cartPopulate);
 
     return res.status(200).json({ success: true, data: updated });
   }
