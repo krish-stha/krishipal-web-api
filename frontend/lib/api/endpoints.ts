@@ -5,6 +5,7 @@ export const endpoints = {
     me: "/auth/me",
     update: (id: string) => `/auth/${id}`,
     uploadProfilePicture: "/auth/upload-profile-picture",
+
     forgotPassword: "/auth/forgot-password",
     resetPassword: "/auth/reset-password",
   },
@@ -15,7 +16,7 @@ export const endpoints = {
     softDelete: (id: string) => `/admin/users/${id}`,
     hardDelete: (id: string) => `/admin/users/${id}/hard`,
 
-    // ✅ NEW
+    // ✅ you said you already have these routes in admin files
     categories: "/admin/categories",
     categoryById: (id: string) => `/admin/categories/${id}`,
 
@@ -24,8 +25,19 @@ export const endpoints = {
     productHardDelete: (id: string) => `/admin/products/${id}/hard`,
   },
 
+  // ✅ PUBLIC
   public: {
     products: "/products",
     productBySlug: (slug: string) => `/products/${slug}`,
+    categories: "/categories", // (we'll add public categories below if you have route; if not, we’ll fetch admin categories later)
+  },
+
+  // ✅ CART
+  cart: {
+    base: "/cart",
+    addItem: "/cart/items",
+    updateItem: (productId: string) => `/cart/items/${productId}`,
+    removeItem: (productId: string) => `/cart/items/${productId}`,
+    clear: "/cart",
   },
 };

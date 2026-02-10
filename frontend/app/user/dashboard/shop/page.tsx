@@ -1,11 +1,31 @@
-import Image from "next/image"
-import { Header } from "../../component/header"
-import { Card, CardContent } from "@/app/auth/components/ui/card"
-import { Button } from "@/app/auth/components/ui/button"
-import { Footer } from "../../component/footer"
+"use client";
 
+import Image from "next/image";
+import { useEffect, useMemo, useState } from "react";
+import { Header } from "../../component/header";
+import { Card, CardContent } from "@/app/auth/components/ui/card";
+import { Button } from "@/app/auth/components/ui/button";
+import { Footer } from "../../component/footer";
+import { listPublicProducts } from "@/lib/api/public/products";
+import { useCart } from "@/lib/contexts/cart-context";
+
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+
+function productImageUrl(filename?: string | null) {
+  if (!filename) return "/images/placeholder.png";
+  if (filename.startsWith("http://") || filename.startsWith("https://")) return filename;
+  // backend stores at /public/product_images/<file>
+  return `${BACKEND_URL}/public/product_images/${filename}`;
+}
 
 export default function ShopPage() {
+  const { add } = useCart();
+
+  const [loading, setLoading] = useState(false);
+  const [products, setProducts] = useState<any[]>([]);
+  const [error, setError] = useState<string>("");
+
+  // keep your category cards UI (placeholder) – later we can connect real categories API
   const categories = [
     { id: 1, name: "Seeds", icon: "🌱", image: "/images/assorted-seeds.png" },
     { id: 2, name: "Fertilizers", icon: "🧪", image: "/images/fertilizers-variety.png" },
@@ -13,66 +33,101 @@ export default function ShopPage() {
     { id: 4, name: "Pesticides", icon: "🛡️", image: "/images/pesticide-application.png" },
     { id: 5, name: "Irrigation", icon: "💧", image: "/images/agricultural-irrigation.png" },
     { id: 6, name: "Equipment", icon: "🚜", image: "/images/vintage-farm-equipment.png" },
-  ]
+  ];
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const res = await listPublicProducts({ page: 1, limit: 12, sort: "newest" });
+        setProducts(res.data || []);
+      } catch (e: any) {
+        setError(e?.message || "Failed to load products");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const featured = useMemo(() => products.slice(0, 2), [products]);
 
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
 
       <main className="flex-1">
-        {/* Featured Products */}
         <section className="py-12">
           <div className="container mx-auto px-4">
+            {/* Featured Products */}
             <div className="grid md:grid-cols-2 gap-8 mb-12">
-              {/* Cabbage Seed Card */}
-              <Card className="overflow-hidden bg-gray-100">
-                <CardContent className="p-8">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-gray-600 mb-2">100% Organic</p>
-                      <h2 className="text-4xl font-bold mb-4">Cabbage Seed</h2>
-                      <p className="text-gray-600 mb-2">Starting At</p>
-                      <p className="text-3xl font-bold text-red-600 mb-6">Rs. 150</p>
-                      <Button className="bg-green-600 hover:bg-green-700 text-white">Shop Now →</Button>
-                    </div>
-                    <div className="relative w-64 h-64">
-                      <Image
-                        src="/images/organic-cabbage-seeds-in-white-bowl.png"
-                        alt="Cabbage seeds"
-                        fill
-                        className="object-contain"
-                      />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              {featured.map((p, idx) => {
+                const price =
+                  p.discountPrice !== null && p.discountPrice !== undefined ? p.discountPrice : p.price;
 
-              {/* Bitter Gourd Seed Card */}
-              <Card className="overflow-hidden bg-blue-100">
-                <CardContent className="p-8">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className="text-4xl font-bold mb-4">Bitter Gourd Seed</h2>
-                      <p className="text-gray-600 mb-2">Starting At</p>
-                      <p className="text-gray-600 mb-2">Starting At</p>
-                      <p className="text-3xl font-bold text-red-600 mb-6">Rs 200</p>
-                      <Button className="bg-green-600 hover:bg-green-700 text-white">Shop Now →</Button>
-                    </div>
-                    <div className="relative w-64 h-64">
-                      <Image src="/images/bitter-gourd-seeds.png" alt="Bitter gourd seeds" fill className="object-contain" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                const bg = idx === 0 ? "bg-gray-100" : "bg-blue-100";
+                const firstImage = Array.isArray(p.images) ? p.images[0] : null;
+
+                return (
+                  <Card key={p._id} className={`overflow-hidden ${bg}`}>
+                    <CardContent className="p-8">
+                      <div className="flex items-center justify-between gap-6">
+                        <div className="min-w-0">
+                          <p className="text-sm text-gray-600 mb-2">
+                            {p.category?.name ? p.category.name : "Featured"}
+                          </p>
+                          <h2 className="text-3xl md:text-4xl font-bold mb-4 truncate">{p.name}</h2>
+
+                          <p className="text-gray-600 mb-2">Starting At</p>
+                          <p className="text-3xl font-bold text-red-600 mb-6">Rs. {price}</p>
+
+                          <div className="flex gap-3">
+                            <Button
+                              className="bg-green-600 hover:bg-green-700 text-white"
+                              onClick={() => add(p._id, 1)}
+                              disabled={Number(p.stock ?? 0) <= 0}
+                            >
+                              {Number(p.stock ?? 0) <= 0 ? "Out of stock" : "Add to cart"}
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="relative w-52 h-52 md:w-64 md:h-64 shrink-0">
+                          <img
+                            src={productImageUrl(firstImage)}
+                            alt={p.name}
+                            className="h-full w-full object-contain"
+                          />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+
+              {/* If no products exist */}
+              {!loading && featured.length === 0 && (
+                <div className="col-span-2 rounded-2xl border bg-slate-50 p-10 text-center text-slate-600">
+                  No products available. Add products from Admin first.
+                </div>
+              )}
             </div>
 
-            {/* View All Products */}
-            <div className="bg-yellow-50 rounded-2xl p-12 text-center mb-12">
-              <Button className="bg-green-600 hover:bg-green-700 text-white px-12 py-6 text-lg">
+            {/* View All Products (simple list below) */}
+            <div className="bg-yellow-50 rounded-2xl p-8 md:p-12 text-center mb-12">
+              <Button
+                className="bg-green-600 hover:bg-green-700 text-white px-12 py-6 text-lg"
+                onClick={() => {
+                  // scroll to products grid below
+                  const el = document.getElementById("all-products");
+                  el?.scrollIntoView({ behavior: "smooth" });
+                }}
+              >
                 View All Products →
               </Button>
             </div>
 
+            {/* Categories (still UI placeholders) */}
             <div className="mb-12">
               <h2 className="text-3xl font-bold mb-6">Categories</h2>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
@@ -96,7 +151,55 @@ export default function ShopPage() {
               </div>
             </div>
 
-            {/* Latest Blogs Section */}
+            {/* All products grid */}
+            <div id="all-products" className="mb-12">
+              <h2 className="text-3xl font-bold mb-6">All Products</h2>
+
+              {error && <p className="text-red-600 mb-4">{error}</p>}
+              {loading && <p className="text-gray-500 mb-4">Loading products...</p>}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                {products.map((p) => {
+                  const firstImage = Array.isArray(p.images) ? p.images[0] : null;
+                  const price =
+                    p.discountPrice !== null && p.discountPrice !== undefined ? p.discountPrice : p.price;
+
+                  return (
+                    <div key={p._id} className="rounded-2xl border bg-white shadow-sm overflow-hidden">
+                      <div className="h-44 bg-slate-50 flex items-center justify-center">
+                        <img
+                          src={productImageUrl(firstImage)}
+                          alt={p.name}
+                          className="h-40 w-full object-contain"
+                        />
+                      </div>
+
+                      <div className="p-4">
+                        <div className="text-xs text-slate-500 mb-1">
+                          {p.category?.name || "Uncategorized"}
+                        </div>
+                        <div className="font-semibold text-slate-900 line-clamp-1">{p.name}</div>
+
+                        <div className="mt-2 flex items-center justify-between">
+                          <div className="text-green-700 font-bold">Rs. {price}</div>
+                          <div className="text-xs text-slate-500">Stock: {p.stock ?? 0}</div>
+                        </div>
+
+                        <Button
+                          className="mt-3 w-full bg-green-600 hover:bg-green-700 text-white"
+                          onClick={() => add(p._id, 1)}
+                          disabled={Number(p.stock ?? 0) <= 0}
+                        >
+                          {Number(p.stock ?? 0) <= 0 ? "Out of stock" : "Add to cart"}
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Keep your “Latest Blogs” + Features exactly as before */}
             <div className="mb-12">
               <h2 className="text-3xl font-bold mb-4">Latest Blogs</h2>
               <p className="text-gray-600 mb-6">
@@ -106,26 +209,8 @@ export default function ShopPage() {
                 Stay informed and connected with the latest trends and developments in agriculture through our dedicated
                 blog section.
               </p>
-
-              {/* <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3"> */}
-                {/* <svg
-                  className="w-5 h-5 text-red-600 flex-shrink-0"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                > */}
-                  {/* <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  /> */}
-                {/* </svg> */}
-                {/* <p className="text-red-800 text-sm"></p> */}
-              {/* </div> */}
             </div>
 
-            {/* Features */}
             <div className="grid md:grid-cols-4 gap-8">
               <div className="text-center">
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -135,6 +220,7 @@ export default function ShopPage() {
                 </div>
                 <h3 className="font-semibold">Free Shipping</h3>
               </div>
+
               <div className="text-center">
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -148,6 +234,7 @@ export default function ShopPage() {
                 </div>
                 <h3 className="font-semibold">Best Price</h3>
               </div>
+
               <div className="text-center">
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -161,6 +248,7 @@ export default function ShopPage() {
                 </div>
                 <h3 className="font-semibold">Free Curbside Pickup</h3>
               </div>
+
               <div className="text-center">
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -181,5 +269,5 @@ export default function ShopPage() {
 
       <Footer />
     </div>
-  )
+  );
 }

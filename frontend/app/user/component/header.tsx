@@ -7,6 +7,8 @@ import { Button } from "@/app/auth/components/ui/button";
 import { useAuth } from "@/lib/contexts/auth-contexts";
 import Cookies from "js-cookie";
 import { useEffect, useMemo, useState } from "react";
+import { useCart } from "@/lib/contexts/cart-context";
+
 import {
   Sheet,
   SheetContent,
@@ -51,13 +53,16 @@ function normalizePhotoUrl(photo: string | null): string | null {
   if (photo.startsWith("http://") || photo.startsWith("https://")) return photo;
 
   // filename only -> /public/profile_photo/<filename>
-  if (!photo.includes("/")) return `${BACKEND_URL}/public/profile_photo/${photo}`;
+  if (!photo.includes("/"))
+    return `${BACKEND_URL}/public/profile_photo/${photo}`;
 
   if (photo.startsWith("public/")) return `${BACKEND_URL}/${photo}`;
   if (photo.startsWith("/public/")) return `${BACKEND_URL}${photo}`;
 
-  if (photo.startsWith("profile_photo/")) return `${BACKEND_URL}/public/${photo}`;
-  if (photo.startsWith("/profile_photo/")) return `${BACKEND_URL}/public${photo}`;
+  if (photo.startsWith("profile_photo/"))
+    return `${BACKEND_URL}/public/${photo}`;
+  if (photo.startsWith("/profile_photo/"))
+    return `${BACKEND_URL}/public${photo}`;
 
   if (!photo.startsWith("/")) return `${BACKEND_URL}/${photo}`;
   return `${BACKEND_URL}${photo}`;
@@ -106,6 +111,7 @@ function initials(name?: string, email?: string) {
 
 export function Header() {
   const { user, isLoading, logout } = useAuth();
+  const { count } = useCart(); // ✅ FIX: now count exists
 
   // ✅ control sheet open/close
   const [profileOpen, setProfileOpen] = useState(false);
@@ -212,7 +218,7 @@ export function Header() {
           <Link href="/user/dashboard/cart" className="relative">
             <ShoppingCart className="h-6 w-6 text-gray-700" />
             <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-              0
+              {count}
             </span>
           </Link>
 
