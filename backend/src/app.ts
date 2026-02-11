@@ -12,6 +12,7 @@ import adminCategoryRoutes from "./routes/admin.category.route";
 import adminProductRoutes from "./routes/admin.product.route";
 import publicProductRoutes from "./routes/public.product.route";
 import cartRoutes from "./routes/cart.route";
+import publicCategoryRoutes from "./routes/public.category.route";
 
 const app = express();
 
@@ -22,10 +23,12 @@ app.use(express.json());
 app.use("/public", express.static(path.join(process.cwd(), "public")));
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
+
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/batches", addressBatchRoutes);
 app.use("/api/admin", adminUserRoutes);
+app.use("/api/categories", publicCategoryRoutes);
 
 // ✅ ADD (no breaking)
 app.use("/api/admin", adminCategoryRoutes);
