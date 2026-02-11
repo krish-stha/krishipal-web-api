@@ -23,6 +23,13 @@ export const endpoints = {
     products: "/admin/products",
     productById: (id: string) => `/admin/products/${id}`,
     productHardDelete: (id: string) => `/admin/products/${id}/hard`,
+
+    carts: "/admin/carts",
+    cartById: (id: string) => `/admin/carts/${id}`,
+    cartSetItemQty: (id: string, productId: string) => `/admin/carts/${id}/items/${productId}`,
+    cartRemoveItem: (id: string, productId: string) => `/admin/carts/${id}/items/${productId}`,
+    cartClear: (id: string) => `/admin/carts/${id}/clear`,
+    cartDelete: (id: string) => `/admin/carts/${id}`,
   },
 
   // ✅ PUBLIC
