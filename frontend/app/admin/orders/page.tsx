@@ -4,18 +4,25 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/app/auth/components/ui/card";
 import { Button } from "@/app/auth/components/ui/button";
-import { adminListCarts } from "@/lib/api/admin/cart";
+import { adminListOrders } from "@/lib/api/admin/order";
 
 function money(n: any) {
   const v = Number(n ?? 0);
   return `Rs. ${Number.isFinite(v) ? v : 0}`;
 }
 
-function isValidObjectId(v: string) {
-  return /^[a-fA-F0-9]{24}$/.test(v);
+function badge(status: string) {
+  const s = String(status || "pending");
+  const base = "inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold";
+  if (s === "pending") return `${base} bg-amber-50 text-amber-700 border border-amber-200`;
+  if (s === "confirmed") return `${base} bg-blue-50 text-blue-700 border border-blue-200`;
+  if (s === "shipped") return `${base} bg-indigo-50 text-indigo-700 border border-indigo-200`;
+  if (s === "delivered") return `${base} bg-green-50 text-green-700 border border-green-200`;
+  if (s === "cancelled") return `${base} bg-red-50 text-red-700 border border-red-200`;
+  return `${base} bg-slate-50 text-slate-700 border border-slate-200`;
 }
 
-export default function AdminCartPage() {
+export default function AdminOrdersPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -30,25 +37,16 @@ export default function AdminCartPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await adminListCarts({
-        page: p,
-        limit,
-        search: search.trim() || undefined,
-      });
-
-      console.log("FIRST ROW:", res.data?.data?.[0]);
+      const res = await adminListOrders({ page: p, limit, search: search.trim() || undefined });
       setRows(res.data?.data || []);
       setTotal(res.data?.meta?.total || 0);
     } catch (e: any) {
-  console.log("ADMIN CART LIST ERROR:", e?.response?.data);
-  setError(e?.response?.data?.message || e?.message || "Failed to load carts");
-  setRows([]);
-  setTotal(0);
-}
-finally {
+      setError(e?.response?.data?.message || e?.message || "Failed to load orders");
+      setRows([]);
+      setTotal(0);
+    } finally {
       setLoading(false);
     }
-    
   };
 
   useEffect(() => {
@@ -61,11 +59,9 @@ finally {
   return (
     <div className="p-6">
       <div className="mb-6">
-        <div className="text-sm text-slate-500">Admin / Cart</div>
-        <h1 className="text-2xl font-bold text-slate-900">Carts</h1>
-        <p className="text-slate-600 mt-1">
-          View carts, abandoned carts, and cart totals (read-only for now).
-        </p>
+        <div className="text-sm text-slate-500">Admin / Orders</div>
+        <h1 className="text-2xl font-bold text-slate-900">Orders</h1>
+        <p className="text-slate-600 mt-1">Manage user orders and update order status.</p>
       </div>
 
       <Card className="rounded-2xl p-4 mb-4">
@@ -74,7 +70,7 @@ finally {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by user email/name..."
+              placeholder="Search by order id / user email / name..."
               className="flex-1 h-10 rounded-xl border bg-white px-3 outline-none focus:ring-2 focus:ring-green-200"
             />
             <Button
@@ -90,7 +86,7 @@ finally {
           </div>
 
           <div className="text-sm text-slate-600">
-            Total carts: <b className="text-slate-900">{total}</b>
+            Total orders: <b className="text-slate-900">{total}</b>
           </div>
         </div>
       </Card>
@@ -99,14 +95,16 @@ finally {
 
       <Card className="rounded-2xl overflow-hidden">
         <div className="overflow-auto">
-          <table className="min-w-[900px] w-full text-sm">
+          <table className="min-w-[1050px] w-full text-sm">
             <thead className="bg-slate-50">
               <tr className="text-left">
+                <th className="p-3 font-semibold">Order</th>
                 <th className="p-3 font-semibold">User</th>
                 <th className="p-3 font-semibold">Email</th>
                 <th className="p-3 font-semibold">Items</th>
-                <th className="p-3 font-semibold">Subtotal</th>
-                <th className="p-3 font-semibold">Updated</th>
+                <th className="p-3 font-semibold">Total</th>
+                <th className="p-3 font-semibold">Status</th>
+                <th className="p-3 font-semibold">Created</th>
                 <th className="p-3 font-semibold text-right">Action</th>
               </tr>
             </thead>
@@ -114,51 +112,39 @@ finally {
             <tbody>
               {loading ? (
                 <tr>
-                  <td className="p-4 text-slate-500" colSpan={6}>
-                    Loading carts...
+                  <td className="p-4 text-slate-500" colSpan={8}>
+                    Loading orders...
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td className="p-4 text-slate-500" colSpan={6}>
-                    No carts found
+                  <td className="p-4 text-slate-500" colSpan={8}>
+                    No orders found
                   </td>
                 </tr>
               ) : (
-                rows.map((c) => {
-                  const cid = String(c?._id || "");
-                  const ok = isValidObjectId(cid);
-
-                  return (
-                    <tr key={cid || Math.random()} className="border-t">
-                      <td className="p-3">{c.userName || "-"}</td>
-                      <td className="p-3">{c.userEmail || "-"}</td>
-                      <td className="p-3">{c.itemsCount ?? 0}</td>
-                      <td className="p-3 text-slate-600">
-                        {(c.itemNames || []).length ? (c.itemNames || []).join(", ") : "-"}
-                      </td>
-                      <td className="p-3 font-semibold text-green-700">{money(c.subtotal)}</td>
-
-                      <td className="p-3 text-slate-600">
-                        {c.updatedAt ? new Date(c.updatedAt).toLocaleString() : "-"}
-                      </td>
-
-                      <td className="p-3 text-right">
-                        {ok ? (
-                          <Link href={`/admin/cart/${cid}`}>
-                            <Button variant="outline" className="border-slate-300">
-                              View
-                            </Button>
-                          </Link>
-                        ) : (
-                          <Button variant="outline" className="border-slate-300" disabled>
-                            Invalid ID
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })
+                rows.map((o) => (
+                  <tr key={o._id} className="border-t">
+                    <td className="p-3 font-mono text-xs text-slate-700">{String(o._id).slice(-10)}</td>
+                    <td className="p-3">{o.userName || "-"}</td>
+                    <td className="p-3">{o.userEmail || "-"}</td>
+                    <td className="p-3">{o.itemsCount ?? 0}</td>
+                    <td className="p-3 font-semibold text-green-700">{money(o.total)}</td>
+                    <td className="p-3">
+                      <span className={badge(o.status)}>{o.status}</span>
+                    </td>
+                    <td className="p-3 text-slate-600">
+                      {o.createdAt ? new Date(o.createdAt).toLocaleString() : "-"}
+                    </td>
+                    <td className="p-3 text-right">
+                      <Link href={`/admin/orders/${o._id}`}>
+                        <Button variant="outline" className="border-slate-300">
+                          View
+                        </Button>
+                      </Link>
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
@@ -174,7 +160,6 @@ finally {
             const p = Math.max(1, page - 1);
             setPage(p);
             fetchData(p);
-            
           }}
         >
           Prev
@@ -192,7 +177,6 @@ finally {
             const p = Math.min(totalPages, page + 1);
             setPage(p);
             fetchData(p);
-            
           }}
         >
           Next

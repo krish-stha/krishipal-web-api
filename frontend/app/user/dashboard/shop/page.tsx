@@ -9,6 +9,7 @@ import { Card } from "@/app/auth/components/ui/card";
 import { listPublicProducts } from "@/lib/api/public/products";
 import { useCart } from "@/lib/contexts/cart-context";
 import { listPublicCategories } from "@/lib/api/public/category";
+import { useAuth } from "@/lib/contexts/auth-contexts"; // ✅ NEW
 
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
@@ -33,6 +34,7 @@ type Category = {
 
 export default function ShopPage() {
   const { add } = useCart();
+  const { user } = useAuth(); // ✅ NEW
 
   // UI state
   const [loading, setLoading] = useState(false);
@@ -120,11 +122,33 @@ export default function ShopPage() {
         <section className="bg-white border-b">
           <div className="container mx-auto px-4 py-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <h1 className="text-3xl font-bold text-slate-900">Shop</h1>
-                <p className="text-slate-600 mt-1">
-                  Find products by category, compare prices, and add to cart.
-                </p>
+              {/* ✅ Updated: keep existing text, add quick actions (no logic changes) */}
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h1 className="text-3xl font-bold text-slate-900">Shop</h1>
+                  <p className="text-slate-600 mt-1">
+                    Find products by category, compare prices, and add to cart.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {user && (
+                    <Link href="/user/dashboard/orders">
+                      <Button
+                        variant="outline"
+                        className="border-slate-300 h-10 rounded-xl"
+                      >
+                        My Orders
+                      </Button>
+                    </Link>
+                  )}
+
+                  <Link href="/user/dashboard/cart">
+                    <Button className="bg-green-600 hover:bg-green-700 text-white h-10 rounded-xl">
+                      View Cart
+                    </Button>
+                  </Link>
+                </div>
               </div>
 
               <form onSubmit={onSearch} className="w-full lg:w-[640px]">
@@ -293,7 +317,10 @@ export default function ShopPage() {
                       key={p._id}
                       className="group rounded-2xl border bg-white overflow-hidden shadow-sm hover:shadow-md transition"
                     >
-                      <Link href={`/user/dashboard/shop/${p.slug}`} className="block">
+                      <Link
+                        href={`/user/dashboard/shop/${p.slug}`}
+                        className="block"
+                      >
                         <div className="relative h-44 bg-slate-50 flex items-center justify-center overflow-hidden">
                           <img
                             src={productImageUrl(firstImage)}

@@ -7,7 +7,12 @@ const router = Router();
 const ctrl = new AdminCartController();
 
 // /api/admin/carts
-router.get("/", protect, asyncHandler(ctrl.list.bind(ctrl)));
+// router.get("/", protect, asyncHandler(ctrl.list.bind(ctrl)));
+router.get("/", (req, res, next) => {
+  console.log("✅ ADMIN CART LIST HIT:", req.originalUrl);
+  next();
+}, protect, asyncHandler(ctrl.list.bind(ctrl)));
+
 router.get("/:id", protect, asyncHandler(ctrl.getById.bind(ctrl)));
 
 router.put("/:id/items/:productId", protect, asyncHandler(ctrl.setItemQty.bind(ctrl)));

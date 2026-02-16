@@ -17,16 +17,34 @@ function money(n: any) {
   return `Rs. ${Number.isFinite(v) ? v : 0}`;
 }
 
+function isValidObjectId(v: string) {
+  return /^[a-fA-F0-9]{24}$/.test(v);
+}
+
 export default function AdminCartDetailPage() {
   const params = useParams();
-  const router = useRouter();
-  const id = String(params?.id || "");
+const router = useRouter();
+
+// ✅ get the first param value no matter what the folder name is
+const id = useMemo(() => {
+  const p: any = params || {};
+  const firstKey = Object.keys(p)[0];
+  const val = firstKey ? p[firstKey] : "";
+  return Array.isArray(val) ? String(val[0] || "") : String(val || "");
+}, [params]);
+
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [cart, setCart] = useState<any>(null);
 
   const fetchCart = async () => {
+    if (!isValidObjectId(id)) {
+      setError("Invalid cart id in URL");
+      setCart(null);
+      return;
+    }
+
     setLoading(true);
     setError("");
     try {
@@ -44,6 +62,7 @@ export default function AdminCartDetailPage() {
     if (id) fetchCart();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
 
   const subtotal = useMemo(() => {
     const items = cart?.items || [];

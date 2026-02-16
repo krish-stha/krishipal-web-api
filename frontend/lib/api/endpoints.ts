@@ -30,6 +30,12 @@ export const endpoints = {
     cartRemoveItem: (id: string, productId: string) => `/admin/carts/${id}/items/${productId}`,
     cartClear: (id: string) => `/admin/carts/${id}/clear`,
     cartDelete: (id: string) => `/admin/carts/${id}`,
+
+    orders: "/admin/orders",
+    orderById: (id: string) => `/admin/orders/${id}`,
+    orderUpdateStatus: (id: string) => `/admin/orders/${id}/status`,
+    
+
   },
 
   // ✅ PUBLIC
@@ -47,4 +53,11 @@ export const endpoints = {
     removeItem: (productId: string) => `/cart/items/${productId}`,
     clear: "/cart",
   },
+
+    orders: {
+    create: "/orders",
+    myOrders: "/orders/me",
+    byId: (id: string) => `/orders/${id}`,
+  },
+
 };

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Header } from "@/app/user/component/header";
 import { Footer } from "@/app/user/component/footer";
@@ -21,14 +22,21 @@ export default function CartPage() {
   const items = cart?.items || [];
 
   const totals = useMemo(() => {
-    const subtotal = items.reduce((sum, it: any) => sum + Number(it.priceSnapshot || 0) * Number(it.qty || 0), 0);
-    // For now, shipping/tax = 0 (Phase B base)
+    const subtotal = items.reduce(
+      (sum, it: any) => sum + Number(it.priceSnapshot || 0) * Number(it.qty || 0),
+      0
+    );
     const shipping = 0;
     const tax = 0;
     const grandTotal = subtotal + shipping + tax;
-
     return { subtotal, shipping, tax, grandTotal };
   }, [items]);
+
+  const hasOutOfStock = useMemo(() => {
+    return items.some((it: any) => Number(it?.product?.stock ?? 0) <= 0);
+  }, [items]);
+
+  const checkoutDisabled = loading || items.length === 0 || hasOutOfStock;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -47,6 +55,7 @@ export default function CartPage() {
                 variant="outline"
                 className="border-red-500 text-red-600 hover:bg-red-50"
                 onClick={() => clear()}
+                disabled={loading}
               >
                 Clear Cart
               </Button>
@@ -136,7 +145,7 @@ export default function CartPage() {
 
                               <Button
                                 variant="outline"
-                                disabled={busyId === id || qty >= maxStock}
+                                disabled={busyId === id || qty >= maxStock || maxStock === 0}
                                 onClick={async () => {
                                   setBusyId(id);
                                   try {
@@ -205,13 +214,27 @@ export default function CartPage() {
                   </div>
                 </div>
 
-                <Button className="mt-6 w-full bg-green-600 hover:bg-green-700 text-white">
-                  Checkout (Next Phase)
-                </Button>
+                <Link
+                  href="/user/dashboard/checkout"
+                  className={checkoutDisabled ? "pointer-events-none" : ""}
+                >
+                  <Button
+                    className="mt-6 w-full bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
+                    disabled={checkoutDisabled}
+                  >
+                    Proceed to Checkout
+                  </Button>
+                </Link>
 
-                <p className="mt-3 text-xs text-slate-400">
-                  Phase B: Cart is real (DB). Checkout/Orders will be Phase C.
-                </p>
+                {hasOutOfStock ? (
+                  <p className="mt-3 text-xs text-red-600">
+                    Remove out-of-stock items to continue checkout.
+                  </p>
+                ) : (
+                  <p className="mt-3 text-xs text-slate-400">
+                    Checkout will validate stock again before placing the order.
+                  </p>
+                )}
               </div>
             </div>
           )}
