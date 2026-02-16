@@ -11,6 +11,7 @@ export interface IOrderItem {
   image?: string | null;
   qty: number;
   priceSnapshot: number;
+  
 }
 
 export interface IOrder extends Document {
@@ -25,6 +26,10 @@ export interface IOrder extends Document {
   status: OrderStatus;
   address: string;
   paymentMethod: PaymentMethod;
+  cancelled_at?: Date | null;
+cancelled_by?: mongoose.Types.ObjectId | null; // user who cancelled (customer or admin)
+cancel_reason?: string | null; // optional
+
 
   deleted_at?: Date | null;
   createdAt: Date;
@@ -66,9 +71,14 @@ const OrderSchema = new Schema<IOrder>(
 
     address: { type: String, required: true },
     paymentMethod: { type: String, enum: ["COD"], default: "COD" },
+    cancelled_at: { type: Date, default: null },
+cancelled_by: { type: Schema.Types.ObjectId, ref: "User", default: null },
+cancel_reason: { type: String, default: null },
+
 
     deleted_at: { type: Date, default: null },
   },
+  
   { timestamps: true }
 );
 

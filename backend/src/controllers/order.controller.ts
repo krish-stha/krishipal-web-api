@@ -218,4 +218,106 @@ export class OrderController {
     return res.status(200).json({ success: true, data: order });
   }
 
+  // PUT /api/orders/:id/cancel
+  // PUT /api/orders/:id/cancel
+// PUT /api/orders/:id/cancel
+async cancelMyOrder(req: AuthRequest, res: Response) {
+  const userId = mustUserId(req);
+  const { id } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) throw new HttpError(400, "Invalid order id");
+
+  // ✅ take reason from body
+  const reasonRaw = String(req.body?.reason ?? "").trim();
+  const reason = reasonRaw.length ? reasonRaw.slice(0, 300) : null; // limit length
+
+  const session = await mongoose.startSession();
+
+  try {
+    session.startTransaction();
+
+    // find order (must belong to user)
+    const order = await OrderModel.findOne(
+      { _id: id, user: userId, deleted_at: null },
+      null,
+      { session }
+    );
+
+    if (!order) throw new HttpError(404, "Order not found");
+
+    // only pending can be cancelled
+    if (order.status !== "pending") {
+      throw new HttpError(400, "Only pending orders can be cancelled");
+    }
+
+    // already cancelled protection
+    if ((order as any).cancelled_at) {
+      await session.commitTransaction();
+      return res.status(200).json({ success: true, data: order });
+    }
+
+    // restore stock
+    for (const it of order.items || []) {
+      const qty = Number((it as any).qty || 0);
+      if (qty > 0) {
+        await ProductModel.updateOne(
+          { _id: (it as any).product, deleted_at: null },
+          { $inc: { stock: qty } },
+          { session }
+        );
+      }
+    }
+
+    // update order fields
+    order.status = "cancelled";
+    (order as any).cancelled_at = new Date();
+    (order as any).cancelled_by = new mongoose.Types.ObjectId(userId);
+    (order as any).cancel_reason = reason;
+
+    await order.save({ session });
+
+    await session.commitTransaction();
+
+    return res.status(200).json({ success: true, data: order });
+  } catch (err: any) {
+    try {
+      await session.abortTransaction();
+    } catch {}
+
+    // ✅ fallback if transactions not supported
+    if (String(err?.message || "").includes("Transaction numbers are only allowed")) {
+      const order = await OrderModel.findOne({ _id: id, user: userId, deleted_at: null });
+      if (!order) throw new HttpError(404, "Order not found");
+
+      if (order.status !== "pending") throw new HttpError(400, "Only pending orders can be cancelled");
+      if ((order as any).cancelled_at) return res.status(200).json({ success: true, data: order });
+
+      for (const it of order.items || []) {
+        const qty = Number((it as any).qty || 0);
+        if (qty > 0) {
+          await ProductModel.updateOne(
+            { _id: (it as any).product, deleted_at: null },
+            { $inc: { stock: qty } }
+          );
+        }
+      }
+
+      order.status = "cancelled";
+      (order as any).cancelled_at = new Date();
+      (order as any).cancelled_by = new mongoose.Types.ObjectId(userId);
+      (order as any).cancel_reason = reason;
+
+      await order.save();
+
+      return res.status(200).json({ success: true, data: order });
+    }
+
+    throw err;
+  } finally {
+    session.endSession();
+  }
+}
+
+
+
 }

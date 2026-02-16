@@ -13,4 +13,6 @@ router.get("/me", protect, asyncHandler(ctrl.myOrders.bind(ctrl)));
 // ✅ NEW: /api/orders/:id (user can only access own order)
 router.get("/:id", protect, asyncHandler(ctrl.getMyOrderById.bind(ctrl)));
 
+router.put("/:id/cancel", protect, asyncHandler(ctrl.cancelMyOrder.bind(ctrl)));
+
 export default router;
