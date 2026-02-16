@@ -1,21 +1,24 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation"; // ✅ ADD
 import { Header } from "@/app/user/component/header";
 import { Footer } from "@/app/user/component/footer";
 import { Button } from "@/app/auth/components/ui/button";
 import { useCart } from "@/lib/contexts/cart-context";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+const BACKEND_URL =
+  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
 
 function productImageUrl(filename?: string | null) {
   if (!filename) return "/images/placeholder.png";
-  if (filename.startsWith("http://") || filename.startsWith("https://")) return filename;
+  if (filename.startsWith("http://") || filename.startsWith("https://"))
+    return filename;
   return `${BACKEND_URL}/public/product_images/${filename}`;
 }
 
 export default function CartPage() {
+  const router = useRouter(); // ✅ ADD
   const { cart, count, loading, setQty, remove, clear } = useCart();
   const [busyId, setBusyId] = useState<string>("");
 
@@ -23,20 +26,20 @@ export default function CartPage() {
 
   const totals = useMemo(() => {
     const subtotal = items.reduce(
-      (sum, it: any) => sum + Number(it.priceSnapshot || 0) * Number(it.qty || 0),
+      (sum, it: any) =>
+        sum + Number(it.priceSnapshot || 0) * Number(it.qty || 0),
       0
     );
     const shipping = 0;
     const tax = 0;
     const grandTotal = subtotal + shipping + tax;
+
     return { subtotal, shipping, tax, grandTotal };
   }, [items]);
 
   const hasOutOfStock = useMemo(() => {
     return items.some((it: any) => Number(it?.product?.stock ?? 0) <= 0);
   }, [items]);
-
-  const checkoutDisabled = loading || items.length === 0 || hasOutOfStock;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -55,7 +58,6 @@ export default function CartPage() {
                 variant="outline"
                 className="border-red-500 text-red-600 hover:bg-red-50"
                 onClick={() => clear()}
-                disabled={loading}
               >
                 Clear Cart
               </Button>
@@ -145,7 +147,7 @@ export default function CartPage() {
 
                               <Button
                                 variant="outline"
-                                disabled={busyId === id || qty >= maxStock || maxStock === 0}
+                                disabled={busyId === id || qty >= maxStock}
                                 onClick={async () => {
                                   setBusyId(id);
                                   try {
@@ -214,25 +216,17 @@ export default function CartPage() {
                   </div>
                 </div>
 
-                <Link
-                  href="/user/dashboard/checkout"
-                  className={checkoutDisabled ? "pointer-events-none" : ""}
+                <Button
+                  className="mt-6 w-full bg-green-600 hover:bg-green-700 text-white"
+                  disabled={loading || items.length === 0 || hasOutOfStock}
+                  onClick={() => router.push("/user/dashboard/checkout")}
                 >
-                  <Button
-                    className="mt-6 w-full bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
-                    disabled={checkoutDisabled}
-                  >
-                    Proceed to Checkout
-                  </Button>
-                </Link>
+                  Checkout
+                </Button>
 
-                {hasOutOfStock ? (
-                  <p className="mt-3 text-xs text-red-600">
+                {hasOutOfStock && (
+                  <p className="mt-3 text-xs text-red-500">
                     Remove out-of-stock items to continue checkout.
-                  </p>
-                ) : (
-                  <p className="mt-3 text-xs text-slate-400">
-                    Checkout will validate stock again before placing the order.
                   </p>
                 )}
               </div>

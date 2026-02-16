@@ -4,33 +4,34 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Header } from "@/app/user/component/header";
 import { Footer } from "@/app/user/component/footer";
+import { Card } from "@/app/auth/components/ui/card";
 import { Button } from "@/app/auth/components/ui/button";
 import { getMyOrders } from "@/lib/api/order";
 
-function money(n: any) {
-  const v = Number(n ?? 0);
-  return `Rs. ${Number.isFinite(v) ? v : 0}`;
-}
-
-function badge(status: string) {
-  const s = String(status || "pending");
-  const base = "inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold";
-  if (s === "pending") return `${base} bg-amber-50 text-amber-700 border border-amber-200`;
-  if (s === "confirmed") return `${base} bg-blue-50 text-blue-700 border border-blue-200`;
-  if (s === "shipped") return `${base} bg-indigo-50 text-indigo-700 border border-indigo-200`;
-  if (s === "delivered") return `${base} bg-green-50 text-green-700 border border-green-200`;
-  if (s === "cancelled") return `${base} bg-red-50 text-red-700 border border-red-200`;
-  return `${base} bg-slate-50 text-slate-700 border border-slate-200`;
+function statusBadge(status: string) {
+  const base = "text-xs px-2 py-1 rounded-full font-semibold";
+  switch (status) {
+    case "pending":
+      return `${base} bg-yellow-50 text-yellow-700`;
+    case "confirmed":
+      return `${base} bg-blue-50 text-blue-700`;
+    case "shipped":
+      return `${base} bg-purple-50 text-purple-700`;
+    case "delivered":
+      return `${base} bg-green-50 text-green-700`;
+    case "cancelled":
+      return `${base} bg-red-50 text-red-700`;
+    default:
+      return `${base} bg-slate-100 text-slate-700`;
+  }
 }
 
 export default function MyOrdersPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
+  const [rows, setRows] = useState<any[]>([]);
   const [page, setPage] = useState(1);
   const limit = 10;
-
-  const [rows, setRows] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
 
   const fetchData = async (p = page) => {
@@ -41,7 +42,7 @@ export default function MyOrdersPage() {
       setRows(res?.data || []);
       setTotal(res?.meta?.total || 0);
     } catch (e: any) {
-      setError(e?.response?.data?.message || e?.message || "Failed to load your orders");
+      setError(e?.response?.data?.message || e?.message || "Failed to load orders");
       setRows([]);
       setTotal(0);
     } finally {
@@ -57,20 +58,20 @@ export default function MyOrdersPage() {
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-slate-50">
       <Header />
 
       <main className="flex-1">
-        <div className="container mx-auto px-4 py-12">
-          <div className="mb-8">
-            <div className="text-sm text-slate-500">My Account</div>
+        <div className="container mx-auto px-4 py-10">
+          <div className="mb-6">
+            <div className="text-sm text-slate-500">Account / Orders</div>
             <h1 className="text-3xl font-bold text-slate-900">My Orders</h1>
-            <p className="text-slate-600 mt-1">Track your order status here.</p>
+            <p className="text-slate-600 mt-1">Track your orders and their status.</p>
           </div>
 
-          {error && <div className="text-red-600 mb-4">{error}</div>}
+          {error && <div className="mb-4 text-sm text-red-600">{error}</div>}
 
-          <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
+          <Card className="rounded-2xl overflow-hidden">
             <div className="overflow-auto">
               <table className="min-w-[900px] w-full text-sm">
                 <thead className="bg-slate-50">
@@ -88,50 +89,44 @@ export default function MyOrdersPage() {
                   {loading ? (
                     <tr>
                       <td className="p-4 text-slate-500" colSpan={6}>
-                        Loading orders...
+                        Loading...
                       </td>
                     </tr>
                   ) : rows.length === 0 ? (
                     <tr>
-                      <td className="p-4 text-slate-500" colSpan={6}>
-                        You don’t have any orders yet.
+                      <td className="p-6 text-slate-600" colSpan={6}>
+                        No orders yet.{" "}
+                        <Link className="text-green-700 font-semibold" href="/user/dashboard/shop">
+                          Shop now
+                        </Link>
                       </td>
                     </tr>
                   ) : (
-                    rows.map((o) => {
-                      const itemsCount = (o.items || []).reduce(
-                        (sum: number, it: any) => sum + Number(it.qty || 0),
-                        0
-                      );
-
-                      return (
-                        <tr key={o._id} className="border-t">
-                          <td className="p-3 font-mono text-xs text-slate-700">
-                            {String(o._id).slice(-10)}
-                          </td>
-                          <td className="p-3">{itemsCount}</td>
-                          <td className="p-3 font-semibold text-green-700">{money(o.total)}</td>
-                          <td className="p-3">
-                            <span className={badge(o.status)}>{o.status}</span>
-                          </td>
-                          <td className="p-3 text-slate-600">
-                            {o.createdAt ? new Date(o.createdAt).toLocaleString() : "-"}
-                          </td>
-                          <td className="p-3 text-right">
-                            <Link href={`/user/dashboard/orders/${o._id}`}>
-                              <Button variant="outline" className="border-slate-300">
-                                Track
-                              </Button>
-                            </Link>
-                          </td>
-                        </tr>
-                      );
-                    })
+                    rows.map((o) => (
+                      <tr key={o._id} className="border-t">
+                        <td className="p-3 font-mono text-xs text-slate-600">{o._id}</td>
+                        <td className="p-3">{(o.items || []).length}</td>
+                        <td className="p-3 font-semibold text-green-700">Rs. {o.total}</td>
+                        <td className="p-3">
+                          <span className={statusBadge(String(o.status))}>{o.status}</span>
+                        </td>
+                        <td className="p-3 text-slate-600">
+                          {o.createdAt ? new Date(o.createdAt).toLocaleString() : "-"}
+                        </td>
+                        <td className="p-3 text-right">
+                          <Link href={`/user/dashboard/orders/${o._id}`}>
+                            <Button variant="outline" className="border-slate-300">
+                              Track
+                            </Button>
+                          </Link>
+                        </td>
+                      </tr>
+                    ))
                   )}
                 </tbody>
               </table>
             </div>
-          </div>
+          </Card>
 
           <div className="mt-5 flex items-center justify-between">
             <Button

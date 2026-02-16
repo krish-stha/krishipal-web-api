@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { ShoppingCart, LogOut } from "lucide-react";
+import { ShoppingCart, LogOut, Package } from "lucide-react"; // ✅ added Package icon (optional)
 import { Button } from "@/app/auth/components/ui/button";
 import { useAuth } from "@/lib/contexts/auth-contexts";
 import Cookies from "js-cookie";
@@ -196,6 +196,17 @@ export function Header() {
           >
             Shop
           </Link>
+
+          {/* ✅ ADD MY ORDERS HERE (Professional placement: after Shop) */}
+          {user && (
+            <Link
+              href="/user/dashboard/orders"
+              className="text-gray-700 hover:text-green-600"
+            >
+              My Orders
+            </Link>
+          )}
+
           <Link
             href="/user/dashboard/search"
             className="text-gray-700 hover:text-green-600"
@@ -253,6 +264,17 @@ export function Header() {
                 </SheetHeader>
 
                 <div className="mt-6 space-y-6">
+                  {/* ✅ OPTIONAL: Add My Orders in the profile panel too (mobile friendly) */}
+                  <Link
+                    href="/user/dashboard/orders"
+                    onClick={() => setProfileOpen(false)}
+                    className="flex items-center gap-2 rounded-xl border bg-white px-4 py-3 text-sm text-slate-700 hover:bg-slate-50"
+                  >
+                    <Package className="h-4 w-4 text-slate-600" />
+                    <span className="font-semibold">My Orders</span>
+                    <span className="ml-auto text-xs text-slate-500">Track</span>
+                  </Link>
+
                   <UserProfilePanel />
 
                   <Button
