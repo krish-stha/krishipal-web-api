@@ -58,6 +58,7 @@ export const endpoints = {
     create: "/orders",
     myOrders: "/orders/me",
     byId: (id: string) => `/orders/${id}`,
+    cancel: (id: string) => `/orders/${id}/cancel`,
   },
 
 };

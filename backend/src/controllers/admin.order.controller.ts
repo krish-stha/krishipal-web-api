@@ -4,11 +4,14 @@ import { AuthRequest } from "../middleware/auth.middleware";
 import { HttpError } from "../errors/http-error";
 import { OrderModel } from "../models/order.model";
 
+// ✅ import your mail function (add this in mail.service.ts as I showed)
+import { sendOrderStatusEmail } from "../services/mail.service";
+
 const ALLOWED_STATUS = ["pending", "confirmed", "shipped", "delivered", "cancelled"] as const;
 
 export class AdminOrderController {
   // GET /api/admin/orders?page=&limit=&search=
-  // Lightweight list: no heavy populate, only user basic
+  // Lightweight list: user basic populated
   async list(req: AuthRequest, res: Response) {
     const page = Math.max(1, Number(req.query.page ?? 1));
     const limit = Math.min(100, Math.max(1, Number(req.query.limit ?? 20)));
@@ -17,8 +20,6 @@ export class AdminOrderController {
 
     const filter: any = { deleted_at: null };
 
-    // simple search by orderId (exact) OR user email/name (via populate filter in JS)
-    // We’ll keep DB query efficient and do safe JS filter after populate.
     const base = await OrderModel.find(filter)
       .select("user items subtotal total status paymentMethod createdAt updatedAt address")
       .populate({ path: "user", select: "fullName email" })
@@ -64,7 +65,6 @@ export class AdminOrderController {
   }
 
   // GET /api/admin/orders/:id
-  // Detail can include richer info. We'll populate user only (items already snapshot).
   async getById(req: AuthRequest, res: Response) {
     const { id } = req.params;
     if (!mongoose.Types.ObjectId.isValid(id)) throw new HttpError(400, "Invalid order id");
@@ -83,19 +83,47 @@ export class AdminOrderController {
     const { id } = req.params;
     if (!mongoose.Types.ObjectId.isValid(id)) throw new HttpError(400, "Invalid order id");
 
-    const status = String(req.body?.status ?? "").trim();
+    const status = String(req.body?.status ?? "").trim().toLowerCase();
     if (!ALLOWED_STATUS.includes(status as any)) {
       throw new HttpError(400, `Invalid status. Allowed: ${ALLOWED_STATUS.join(", ")}`);
     }
 
-    const updated = await OrderModel.findOneAndUpdate(
-      { _id: id, deleted_at: null },
-      { $set: { status } },
-      { new: true }
-    ).lean();
+    // ✅ fetch order + user email first (populate is needed for email)
+    const order = await OrderModel.findOne({ _id: id, deleted_at: null }).populate({
+      path: "user",
+      select: "fullName email",
+    });
 
-    if (!updated) throw new HttpError(404, "Order not found");
+    if (!order) throw new HttpError(404, "Order not found");
 
-    return res.status(200).json({ success: true, data: updated });
+    const oldStatus = String(order.status ?? "").toLowerCase();
+    if (oldStatus === status) {
+      // no change, no email
+      return res.status(200).json({ success: true, data: order.toObject() });
+    }
+
+    order.status = status as any;
+    await order.save();
+
+    // ✅ Send email (do NOT fail API if email fails)
+    const user: any = (order as any).user;
+    const to = user?.email;
+
+    if (to) {
+      sendOrderStatusEmail({
+        to,
+        userName: user?.fullName,
+        orderId: String(order._id),
+        status: String(order.status),
+        total: Number(order.total ?? 0),
+        address: String(order.address ?? ""),
+      }).catch((err: any) => {
+        console.error("❌ Order status email failed:", err?.message || err);
+      });
+    } else {
+      console.warn("⚠️ Order status email skipped: user email missing");
+    }
+
+    return res.status(200).json({ success: true, data: order.toObject() });
   }
 }
