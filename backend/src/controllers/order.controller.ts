@@ -5,6 +5,8 @@ import { HttpError } from "../errors/http-error";
 import { CartModel } from "../models/cart.model";
 import { ProductModel } from "../models/product.model";
 import { OrderModel } from "../models/order.model";
+import PDFDocument from "pdfkit";
+
 
 function mustUserId(req: AuthRequest) {
   const userId = req.user?.id;
@@ -180,6 +182,69 @@ export class OrderController {
       session.endSession();
     }
   }
+
+  // GET /api/orders/:id/invoice
+async downloadInvoice(req: AuthRequest, res: Response) {
+  const userId = mustUserId(req);
+  const { id } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) throw new HttpError(400, "Invalid order id");
+
+  const order = await OrderModel.findOne({ _id: id, user: userId, deleted_at: null }).lean();
+  if (!order) throw new HttpError(404, "Order not found");
+
+  if (String(order.paymentStatus || "").toLowerCase() !== "paid") {
+    throw new HttpError(400, "Invoice available only after payment");
+  }
+
+  // ✅ PDF headers
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `inline; filename="invoice-${String(order._id).slice(-8)}.pdf"`);
+
+  const doc = new PDFDocument({ margin: 40 });
+  doc.pipe(res);
+
+  // --- Company info (use env or hardcode for college project)
+  const companyName = process.env.COMPANY_NAME || "KrishiPal";
+  const companyAddress = process.env.COMPANY_ADDRESS || "Nepal";
+  const companyPhone = process.env.COMPANY_PHONE || "";
+
+  doc.fontSize(18).text(companyName, { align: "left" });
+  doc.fontSize(10).fillColor("gray").text(companyAddress);
+  if (companyPhone) doc.text(companyPhone);
+  doc.moveDown(1);
+
+  doc.fillColor("black").fontSize(14).text("INVOICE", { align: "right" });
+  doc.fontSize(10).text(`Order ID: ${order._id}`, { align: "right" });
+  doc.text(`Date: ${new Date(order.createdAt).toLocaleString()}`, { align: "right" });
+  doc.moveDown(1);
+
+  doc.fontSize(11).text(`Bill To: ${order.address}`);
+  doc.moveDown(1);
+
+  // Items header
+  doc.fontSize(11).text("Items:", { underline: true });
+  doc.moveDown(0.5);
+
+  // Items
+  (order.items || []).forEach((it: any) => {
+    const lineTotal = Number(it.qty || 0) * Number(it.priceSnapshot || 0);
+    doc.fontSize(10).text(
+      `${it.name} (${it.sku})  x${it.qty}   @ Rs.${it.priceSnapshot}   = Rs.${lineTotal}`
+    );
+  });
+
+  doc.moveDown(1);
+  doc.fontSize(11).text(`Subtotal: Rs. ${order.subtotal}`);
+  doc.text(`Shipping: Rs. ${order.shippingFee}`);
+  doc.fontSize(12).text(`Total: Rs. ${order.total}`, { underline: true });
+
+  doc.moveDown(1);
+  doc.fontSize(10).fillColor("gray").text("Thank you for shopping with KrishiPal.");
+
+  doc.end();
+}
+
 
   // GET /api/orders/me
   async myOrders(req: AuthRequest, res: Response) {

@@ -14,5 +14,8 @@ router.get("/me", protect, asyncHandler(ctrl.myOrders.bind(ctrl)));
 router.get("/:id", protect, asyncHandler(ctrl.getMyOrderById.bind(ctrl)));
 
 router.put("/:id/cancel", protect, asyncHandler(ctrl.cancelMyOrder.bind(ctrl)));
+// ✅ Invoice (user)
+router.get("/:id/invoice", protect, asyncHandler(ctrl.downloadInvoice.bind(ctrl)));
+
 
 export default router;

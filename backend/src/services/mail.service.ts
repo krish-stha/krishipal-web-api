@@ -56,6 +56,53 @@ export async function sendResetEmail(to: string, resetLink: string) {
   });
 }
 
+export async function sendPaymentReceiptEmail(params: {
+  to: string;
+  userName?: string;
+  orderId: string;
+  total: number;
+  gateway: string;
+  invoicePdf: Buffer;
+}) {
+  const name = params.userName ? `<b>${params.userName}</b>` : "there";
+
+  const html = `
+    <div style="font-family: Arial; padding: 20px; color: #0f172a;">
+      <h2 style="margin: 0 0 8px;">Payment Received ✅</h2>
+      <p style="margin: 0 0 14px;">Hello ${name}, we received your payment.</p>
+
+      <div style="border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px;">
+        <p style="margin: 0 0 8px;"><b>Order ID:</b> ${params.orderId}</p>
+        <p style="margin: 0 0 8px;"><b>Gateway:</b> ${params.gateway}</p>
+        <p style="margin: 0 0 8px;"><b>Total:</b> Rs. ${Number(params.total || 0)}</p>
+      </div>
+
+      <p style="margin-top: 14px; color:#475569;">
+        Invoice is attached as PDF.
+      </p>
+    </div>
+  `;
+
+  // NOTE: Using transporter directly with attachments
+  const from = process.env.EMAIL_FROM || process.env.EMAIL_USER;
+
+  // @ts-ignore transporter exists in this module scope
+  return transporter.sendMail({
+    from,
+    to: params.to,
+    subject: `Payment Receipt - Order ${String(params.orderId).slice(-6)} - KrishiPal`,
+    html,
+    attachments: [
+      {
+        filename: `invoice-${String(params.orderId).slice(-8)}.pdf`,
+        content: params.invoicePdf,
+        contentType: "application/pdf",
+      },
+    ],
+  });
+}
+
+
 // ---------------- NEW: order status email ----------------
 export async function sendOrderStatusEmail(params: {
   to: string;
@@ -92,4 +139,6 @@ export async function sendOrderStatusEmail(params: {
       </div>
     `,
   });
+
+  
 }

@@ -14,6 +14,8 @@ import publicProductRoutes from "./routes/public.product.route";
 import cartRoutes from "./routes/cart.route";
 import publicCategoryRoutes from "./routes/public.category.route";
 import paymentRoutes from "./routes/payment.route";
+import adminPaymentRoutes from "./routes/admin.payment.route";
+
 
 import orderRoutes from "./routes/order.route";
 import adminOrderRoutes from "./routes/admin.order.route";
@@ -62,6 +64,8 @@ app.use("/api/admin/carts", adminCartRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/admin", adminOrderRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/admin", adminPaymentRoutes);
+
 
 
 app.use(errorHandler);

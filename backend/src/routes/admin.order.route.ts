@@ -9,6 +9,8 @@ const ctrl = new AdminOrderController();
 
 // /api/admin/orders
 router.get("/orders", protect, adminOnly, asyncHandler(ctrl.list.bind(ctrl)));
+router.get("/orders/:id/invoice", protect, adminOnly, asyncHandler(ctrl.downloadInvoice.bind(ctrl)));
+
 router.get("/orders/:id", protect, adminOnly, asyncHandler(ctrl.getById.bind(ctrl)));
 router.put("/orders/:id/status", protect, adminOnly, asyncHandler(ctrl.updateStatus.bind(ctrl)));
 

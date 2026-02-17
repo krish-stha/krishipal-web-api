@@ -3,6 +3,9 @@ import mongoose from "mongoose";
 import { AuthRequest } from "../middleware/auth.middleware";
 import { HttpError } from "../errors/http-error";
 import { OrderModel } from "../models/order.model";
+import path from "path";
+import { generateInvoicePdfBuffer } from "../services/invoice.service";
+
 
 // ✅ import your mail function (add this in mail.service.ts as I showed)
 import { sendOrderStatusEmail } from "../services/mail.service";
@@ -77,6 +80,37 @@ export class AdminOrderController {
 
     return res.status(200).json({ success: true, data: order });
   }
+
+    // GET /api/admin/orders/:id/invoice
+  async downloadInvoice(req: AuthRequest, res: Response) {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) throw new HttpError(400, "Invalid order id");
+
+    const order = await OrderModel.findOne({ _id: id, deleted_at: null }).lean();
+    if (!order) throw new HttpError(404, "Order not found");
+
+    const company = {
+      name: process.env.COMPANY_NAME || "KrishiPal",
+      address: process.env.COMPANY_ADDRESS || "Nepal",
+    };
+
+    const logoPath =
+      process.env.COMPANY_LOGO_PATH ||
+      path.join(process.cwd(), "public", "logo.png");
+
+    const pdf = await generateInvoicePdfBuffer({
+      order,
+      company,
+      logoPath,
+    });
+
+    const invoiceNo = `INV-${String(order._id).slice(-8).toUpperCase()}`;
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="${invoiceNo}.pdf"`);
+    return res.status(200).send(pdf);
+  }
+
 
   // PUT /api/admin/orders/:id/status  { status }
   async updateStatus(req: AuthRequest, res: Response) {
