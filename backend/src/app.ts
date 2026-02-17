@@ -13,6 +13,7 @@ import adminProductRoutes from "./routes/admin.product.route";
 import publicProductRoutes from "./routes/public.product.route";
 import cartRoutes from "./routes/cart.route";
 import publicCategoryRoutes from "./routes/public.category.route";
+import paymentRoutes from "./routes/payment.route";
 
 import orderRoutes from "./routes/order.route";
 import adminOrderRoutes from "./routes/admin.order.route";
@@ -22,7 +23,19 @@ import adminCartRoutes from "./routes/admin.cart.route";
 
 const app = express();
 
-app.use(cors());
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
+
+app.use(
+  cors({
+    origin: [FRONTEND_URL], // ✅ must be explicit when credentials are used
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
+
+
+
 app.use(express.json());
 
 // Static
@@ -48,6 +61,8 @@ app.use("/api/cart", cartRoutes);
 app.use("/api/admin/carts", adminCartRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/admin", adminOrderRoutes);
+app.use("/api/payments", paymentRoutes);
+
 
 app.use(errorHandler);
 

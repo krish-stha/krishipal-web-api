@@ -2,6 +2,8 @@ import mongoose, { Schema, Document } from "mongoose";
 
 export type OrderStatus = "pending" | "confirmed" | "shipped" | "delivered" | "cancelled";
 export type PaymentMethod = "COD";
+export type PaymentStatus = "unpaid" | "initiated" | "paid" | "failed";
+export type PaymentGateway = "COD" | "KHALTI" | "ESEWA";
 
 export interface IOrderItem {
   product: mongoose.Types.ObjectId;
@@ -11,7 +13,6 @@ export interface IOrderItem {
   image?: string | null;
   qty: number;
   priceSnapshot: number;
-  
 }
 
 export interface IOrder extends Document {
@@ -25,11 +26,22 @@ export interface IOrder extends Document {
 
   status: OrderStatus;
   address: string;
-  paymentMethod: PaymentMethod;
-  cancelled_at?: Date | null;
-cancelled_by?: mongoose.Types.ObjectId | null; // user who cancelled (customer or admin)
-cancel_reason?: string | null; // optional
 
+  // existing
+  paymentMethod: PaymentMethod;
+
+  // cancel fields
+  cancelled_at?: Date | null;
+  cancelled_by?: mongoose.Types.ObjectId | null;
+  cancel_reason?: string | null;
+
+  // ✅ payment tracking (NEW)
+  paymentStatus: PaymentStatus;
+  paidAt?: Date | null;
+
+  paymentGateway?: PaymentGateway;
+  paymentRef?: string | null;
+  paymentMeta?: any;
 
   deleted_at?: Date | null;
   createdAt: Date;
@@ -70,15 +82,35 @@ const OrderSchema = new Schema<IOrder>(
     },
 
     address: { type: String, required: true },
-    paymentMethod: { type: String, enum: ["COD"], default: "COD" },
-    cancelled_at: { type: Date, default: null },
-cancelled_by: { type: Schema.Types.ObjectId, ref: "User", default: null },
-cancel_reason: { type: String, default: null },
 
+    // existing
+    paymentMethod: { type: String, enum: ["COD", "KHALTI", "ESEWA"], default: "COD" },
+
+
+    // cancel
+    cancelled_at: { type: Date, default: null },
+    cancelled_by: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    cancel_reason: { type: String, default: null },
+
+    // ✅ payment tracking (NEW)
+    paymentStatus: {
+      type: String,
+      enum: ["unpaid", "initiated", "paid", "failed"],
+      default: "unpaid",
+      index: true,
+    },
+    paidAt: { type: Date, default: null },
+
+    paymentGateway: {
+      type: String,
+      enum: ["COD", "KHALTI", "ESEWA"],
+      default: "COD",
+    },
+    paymentRef: { type: String, default: null },
+    paymentMeta: { type: Schema.Types.Mixed, default: null },
 
     deleted_at: { type: Date, default: null },
   },
-  
   { timestamps: true }
 );
 

@@ -1,4 +1,3 @@
-// frontend/lib/api/axios.ts
 import axios, { AxiosError } from "axios";
 import { getToken, clearAuthCookies } from "@/lib/cookie";
 
@@ -10,36 +9,25 @@ if (!API_BASE_URL) {
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
+  // ✅ IMPORTANT: token based auth, so keep credentials OFF
+  withCredentials: false,
 });
 
-/* ============================
-   Request Interceptor
-============================ */
 api.interceptors.request.use((config) => {
   const token = getToken();
 
   if (token) {
-    // ensure headers exists
     config.headers = config.headers ?? {};
     config.headers["Authorization"] = `Bearer ${token}`;
   }
 
-  // Don't set Content-Type for FormData
   return config;
 });
 
-/* ============================
-   Response Interceptor
-============================ */
 api.interceptors.response.use(
   (res) => res,
   (err: AxiosError<any>) => {
-    const status = err.response?.status;
-
-    if (status === 401) {
-      clearAuthCookies();
-    }
-
+    if (err.response?.status === 401) clearAuthCookies();
     return Promise.reject(err);
   }
 );

@@ -2,20 +2,19 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Card } from "@/app/auth/components/ui/card";
 import { Button } from "@/app/auth/components/ui/button";
 import { cancelMyOrder, getMyOrderById } from "@/lib/api/order";
+import { initiateKhaltiPayment } from "@/lib/api/payment";
 
 function money(n: any) {
   const v = Number(n ?? 0);
   return `Rs. ${Number.isFinite(v) ? v : 0}`;
 }
-
 function isValidObjectId(v: string) {
   return /^[a-fA-F0-9]{24}$/.test(v);
 }
-
 function statusLabel(s?: string) {
   const v = String(s || "").toLowerCase();
   if (!v) return "-";
@@ -25,8 +24,8 @@ function statusLabel(s?: string) {
 export default function TrackOrderPage() {
   const params = useParams();
   const router = useRouter();
+  const sp = useSearchParams();
 
-  // ✅ robust: get first param value (works for [id], [orderId], etc)
   const id = useMemo(() => {
     const p: any = params || {};
     const firstKey = Object.keys(p)[0];
@@ -38,18 +37,18 @@ export default function TrackOrderPage() {
   const [error, setError] = useState("");
   const [order, setOrder] = useState<any>(null);
 
+  const [paymentChoice, setPaymentChoice] = useState<"COD" | "KHALTI">("KHALTI"); // dummy selector
+
   const fetchOrder = async () => {
     if (!isValidObjectId(id)) {
       setError("Invalid order id in URL");
       setOrder(null);
       return;
     }
-
     setLoading(true);
     setError("");
     try {
       const res = await getMyOrderById(id);
-      // API returns: { success: true, data: order }
       setOrder(res?.data || null);
     } catch (e: any) {
       setError(e?.response?.data?.message || e?.message || "Failed to load order");
@@ -64,44 +63,77 @@ export default function TrackOrderPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // show a tiny message after redirect
+  useEffect(() => {
+    const paid = sp.get("paid");
+    if (paid === "1") setError(""); // clear any old error
+    if (paid === "0") setError("Payment verification failed. Try again.");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const subtotal = useMemo(() => Number(order?.subtotal || 0), [order]);
   const shipping = useMemo(() => Number(order?.shippingFee || 0), [order]);
-  const total = useMemo(
-    () => Number(order?.total || subtotal + shipping),
-    [order, subtotal, shipping]
-  );
+  const total = useMemo(() => Number(order?.total || subtotal + shipping), [order, subtotal, shipping]);
 
   const currentStatus = String(order?.status || "").toLowerCase();
+  const paymentStatus = String(order?.paymentStatus || "unpaid").toLowerCase();
+  const gateway = String(order?.paymentGateway || "COD").toUpperCase();
 
   const steps = ["pending", "confirmed", "shipped", "delivered"] as const;
   const activeIndex = Math.max(0, steps.indexOf(currentStatus as any));
 
-  // ✅ UPDATED: ask reason + send it
+  const canCancel = currentStatus === "pending" && paymentStatus !== "paid";
+  const canPay = currentStatus === "pending" && paymentStatus !== "paid";
+
+  const goBackSmart = () => {
+  // if there is real history, go back
+  // if (typeof window !== "undefined" && window.history.length > 1) {
+  //   router.back();
+  //   return;
+  // }
+  // otherwise go to orders page
+  router.push("/user/dashboard/shop");
+};
+
+
   const onCancel = async () => {
-    if (currentStatus !== "pending") return;
+    if (!canCancel) return;
 
     const reason = (prompt("Cancel reason (optional):") || "").trim();
-
     if (!confirm("Cancel this order?")) return;
 
     setLoading(true);
     setError("");
     try {
-      // ✅ send reason to backend
       const res = await cancelMyOrder(id, reason);
-
-      // backend likely returns { success:true, data: order }
-      // your cancelMyOrder returns res.data, so:
       setOrder(res?.data || null);
-
-      // optional: refresh from server to be 100% sure
-      // await fetchOrder();
     } catch (e: any) {
       setError(e?.response?.data?.message || e?.message || "Failed to cancel order");
     } finally {
       setLoading(false);
     }
   };
+
+  const onPay = async () => {
+  setError("");
+  setLoading(true);
+  try {
+    const res = await initiateKhaltiPayment(id);
+
+    const paymentUrl = res?.data?.payment_url; // ✅ correct
+
+    if (!paymentUrl) {
+      setError("No payment_url received: " + JSON.stringify(res));
+      return;
+    }
+
+    window.location.href = paymentUrl;
+  } catch (e: any) {
+    setError(e?.response?.data?.message || e?.message || "Failed to initiate Khalti");
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="p-6">
@@ -114,20 +146,22 @@ export default function TrackOrderPage() {
 
         <div className="flex gap-2">
           <Button
-            variant="outline"
-            className="border-slate-300"
-            onClick={() => router.back()}
-          >
-            Back
-          </Button>
+  variant="outline"
+  className="border-slate-300"
+  onClick={goBackSmart}
+>
+  Back
+</Button>
 
-          {/* ✅ Cancel only when pending */}
-          {currentStatus === "pending" && (
-            <Button
-              className="bg-red-600 hover:bg-red-700 text-white"
-              onClick={onCancel}
-              disabled={loading}
-            >
+
+          {canPay && (
+            <Button className="bg-purple-600 hover:bg-purple-700 text-white" onClick={onPay} disabled={loading}>
+              {loading ? "Processing..." : "Pay Now"}
+            </Button>
+          )}
+
+          {canCancel && (
+            <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={onCancel} disabled={loading}>
               {loading ? "Cancelling..." : "Cancel Order"}
             </Button>
           )}
@@ -137,7 +171,7 @@ export default function TrackOrderPage() {
       {error && <div className="text-red-600 mb-4">{error}</div>}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* LEFT: status + items */}
+        {/* LEFT */}
         <div className="lg:col-span-2 space-y-6">
           <Card className="rounded-2xl p-5">
             <div className="font-semibold text-slate-900 mb-3">Status</div>
@@ -148,9 +182,7 @@ export default function TrackOrderPage() {
                 return (
                   <div key={s} className="flex-1">
                     <div className={`h-2 rounded-full ${done ? "bg-green-600" : "bg-slate-200"}`} />
-                    <div className="text-xs text-center mt-2 text-slate-600">
-                      {statusLabel(s)}
-                    </div>
+                    <div className="text-xs text-center mt-2 text-slate-600">{statusLabel(s)}</div>
                   </div>
                 );
               })}
@@ -163,8 +195,6 @@ export default function TrackOrderPage() {
             {currentStatus === "cancelled" && (
               <div className="text-sm text-red-600 mt-2 space-y-1">
                 <div>This order has been cancelled.</div>
-
-                {/* ✅ show reason if exists */}
                 {order?.cancel_reason ? (
                   <div className="text-slate-700">
                     Reason: <b>{String(order.cancel_reason)}</b>
@@ -217,10 +247,7 @@ export default function TrackOrderPage() {
                           <td className="p-3">
                             <div className="font-semibold text-slate-900">{it?.name || "-"}</div>
                             {it?.slug ? (
-                              <Link
-                                href={`/user/dashboard/shop/${it.slug}`}
-                                className="text-xs text-slate-500 hover:underline"
-                              >
+                              <Link href={`/user/dashboard/shop/${it.slug}`} className="text-xs text-slate-500 hover:underline">
                                 /{it.slug}
                               </Link>
                             ) : (
@@ -241,7 +268,7 @@ export default function TrackOrderPage() {
           </Card>
         </div>
 
-        {/* RIGHT: summary + address */}
+        {/* RIGHT */}
         <div className="space-y-6">
           <Card className="rounded-2xl p-5">
             <div className="font-semibold text-slate-900 mb-3">Summary</div>
@@ -261,8 +288,43 @@ export default function TrackOrderPage() {
               <span className="font-bold text-slate-900">{money(total)}</span>
             </div>
 
-            <div className="text-xs text-slate-500 mt-4">
-              Payment: <b className="text-slate-700">{String(order?.paymentMethod || "COD")}</b>
+            {/* ✅ Payment choice (dummy UI but real behavior) */}
+            {canPay && (
+              <div className="mt-4">
+                <div className="text-sm font-semibold text-slate-900">Payment Method</div>
+                <div className="mt-2 flex gap-3 text-sm">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="pay"
+                      checked={paymentChoice === "COD"}
+                      onChange={() => setPaymentChoice("COD")}
+                    />
+                    COD
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="pay"
+                      checked={paymentChoice === "KHALTI"}
+                      onChange={() => setPaymentChoice("KHALTI")}
+                    />
+                    Khalti
+                  </label>
+                </div>
+              </div>
+            )}
+
+            <div className="text-xs text-slate-500 mt-4 space-y-1">
+              <div>
+                Payment Gateway: <b className="text-slate-700">{gateway}</b>
+              </div>
+              <div>
+                Payment Status:{" "}
+                <b className={paymentStatus === "paid" ? "text-green-700" : "text-slate-700"}>
+                  {statusLabel(paymentStatus)}
+                </b>
+              </div>
             </div>
           </Card>
 
