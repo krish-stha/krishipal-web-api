@@ -273,27 +273,36 @@ export class PaymentController {
 
       // ✅ Auto email with invoice
       try {
-        const user = await UserModel.findById(userId).select("fullName email").lean();
-        
-        if (user?.email) {
-          const invoicePdf = await generateInvoicePdfBuffer({
-            order: order.toObject(),
-            user,
-            company: { name: COMPANY_NAME, address: COMPANY_ADDRESS },
-            logoPath: COMPANY_LOGO_PATH,
-            
-          }
-        );
-          
+        const user = await UserModel.findById(userId)
+  .select("fullName email countryCode phone")
+  .lean();
 
-          await sendPaymentReceiptEmail({
-            to: user.email,
-            userName: user.fullName,
-            orderId: String(order._id),
-            total: Number(order.total || 0),
-            gateway: "KHALTI",
-            invoicePdf,
-          });
+if (user?.email) {
+  const cc = String((user as any)?.countryCode || "").trim();
+  const ph = String((user as any)?.phone || "").trim();
+  const customerPhone = ph ? `${cc}${ph}` : "-";
+
+  const invoicePdf = await generateInvoicePdfBuffer({
+    order: order.toObject(),
+    company: { name: COMPANY_NAME, address: COMPANY_ADDRESS },
+    logoPath: COMPANY_LOGO_PATH,
+
+    // ✅ pass customer explicitly (strongest + no confusion)
+    customer: {
+      name: (user as any)?.fullName || "-",
+      email: (user as any)?.email || "-",
+      phone: customerPhone,
+    },
+  });
+
+  await sendPaymentReceiptEmail({
+    to: (user as any).email,
+    userName: (user as any).fullName,
+    orderId: String(order._id),
+    total: Number(order.total || 0),
+    gateway: "KHALTI",
+    invoicePdf,
+  });
         }
       } catch (e: any) {
         console.error("❌ Payment receipt email failed:", e?.message || e);

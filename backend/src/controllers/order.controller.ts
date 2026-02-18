@@ -197,16 +197,26 @@ export class OrderController {
   const order = await OrderModel.findOne({ _id: id, user: userId, deleted_at: null }).lean();
   if (!order) throw new HttpError(404, "Order not found");
 
-  // ✅ allow invoice only for paid orders (recommended)
-  if (String(order.paymentStatus).toLowerCase() !== "paid") {
+  // ✅ allow invoice only for paid orders
+  if (String(order.paymentStatus || "").toLowerCase() !== "paid") {
     throw new HttpError(400, "Invoice available only after payment");
   }
+
+  // ✅ Fetch user directly (reliable)
+  const user = await UserModel.findById(userId).select("fullName email countryCode phone").lean();
+
+  const countryCode = String((user as any)?.countryCode || "").trim();
+  const phoneOnly = String((user as any)?.phone || "").trim();
+
+  // ✅ Build phone nicely
+  const customerPhone =
+    phoneOnly
+      ? `${countryCode}${countryCode && !countryCode.endsWith("-") && !countryCode.endsWith(" ") ? "" : ""}${phoneOnly}`
+      : "-";
 
   const COMPANY_NAME = process.env.COMPANY_NAME || "KrishiPal";
   const COMPANY_ADDRESS = process.env.COMPANY_ADDRESS || "Kathmandu, Nepal";
 
-  // ✅ IMPORTANT: Logo must exist INSIDE BACKEND project
-  // Put file here: backend/public/logo.png
   const logoPath = path.resolve(process.cwd(), "public", "logo.png");
   const safeLogoPath = fs.existsSync(logoPath) ? logoPath : undefined;
 
@@ -214,12 +224,24 @@ export class OrderController {
     order,
     company: { name: COMPANY_NAME, address: COMPANY_ADDRESS },
     logoPath: safeLogoPath,
+    customer: {
+      name: (user as any)?.fullName || "-",
+      email: (user as any)?.email || "-",
+      phone: customerPhone,
+    },
   });
 
+  // ✅ Avoid browser caching old PDF
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+
   res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `inline; filename="invoice-${id}.pdf"`);
+  res.setHeader("Content-Disposition", `inline; filename="invoice-${String(order._id).slice(-8)}.pdf"`);
+
   return res.status(200).send(pdf);
 }
+
 
 
   // GET /api/orders/:id/invoice
@@ -236,53 +258,41 @@ async downloadInvoice(req: AuthRequest, res: Response) {
     throw new HttpError(400, "Invoice available only after payment");
   }
 
-  // ✅ PDF headers
+  // ✅ Fetch user directly
+  const user = await UserModel.findById(userId).select("fullName email countryCode phone").lean();
+
+  const cc = String((user as any)?.countryCode || "").trim();
+  const ph = String((user as any)?.phone || "").trim();
+  const customerPhone = ph ? `${cc}${ph}` : "-";
+
+  const COMPANY_NAME = process.env.COMPANY_NAME || "KrishiPal";
+  const COMPANY_ADDRESS = process.env.COMPANY_ADDRESS || "Kathmandu, Nepal";
+
+  const logoPath = path.resolve(process.cwd(), "public", "logo.png");
+  const safeLogoPath = fs.existsSync(logoPath) ? logoPath : undefined;
+
+  console.log("USER PHONE:", user?.countryCode, user?.phone);
+
+
+  const pdf = await generateInvoicePdfBuffer({
+    order,
+    company: { name: COMPANY_NAME, address: COMPANY_ADDRESS },
+    logoPath: safeLogoPath,
+    customer: {
+      name: (user as any)?.fullName || "-",
+      email: (user as any)?.email || "-",
+      phone: customerPhone,
+    },
+  });
+
+  // ✅ prevent cached old PDF
+  res.setHeader("Cache-Control", "no-store");
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `inline; filename="invoice-${String(order._id).slice(-8)}.pdf"`);
 
-  const doc = new PDFDocument({ margin: 40 });
-  doc.pipe(res);
-
-  // --- Company info (use env or hardcode for college project)
-  const companyName = process.env.COMPANY_NAME || "KrishiPal";
-  const companyAddress = process.env.COMPANY_ADDRESS || "Nepal";
-  const companyPhone = process.env.COMPANY_PHONE || "";
-
-  doc.fontSize(18).text(companyName, { align: "left" });
-  doc.fontSize(10).fillColor("gray").text(companyAddress);
-  if (companyPhone) doc.text(companyPhone);
-  doc.moveDown(1);
-
-  doc.fillColor("black").fontSize(14).text("INVOICE", { align: "right" });
-  doc.fontSize(10).text(`Order ID: ${order._id}`, { align: "right" });
-  doc.text(`Date: ${new Date(order.createdAt).toLocaleString()}`, { align: "right" });
-  doc.moveDown(1);
-
-  doc.fontSize(11).text(`Bill To: ${order.address}`);
-  doc.moveDown(1);
-
-  // Items header
-  doc.fontSize(11).text("Items:", { underline: true });
-  doc.moveDown(0.5);
-
-  // Items
-  (order.items || []).forEach((it: any) => {
-    const lineTotal = Number(it.qty || 0) * Number(it.priceSnapshot || 0);
-    doc.fontSize(10).text(
-      `${it.name} (${it.sku})  x${it.qty}   @ Rs.${it.priceSnapshot}   = Rs.${lineTotal}`
-    );
-  });
-
-  doc.moveDown(1);
-  doc.fontSize(11).text(`Subtotal: Rs. ${order.subtotal}`);
-  doc.text(`Shipping: Rs. ${order.shippingFee}`);
-  doc.fontSize(12).text(`Total: Rs. ${order.total}`, { underline: true });
-
-  doc.moveDown(1);
-  doc.fontSize(10).fillColor("gray").text("Thank you for shopping with KrishiPal.");
-
-  doc.end();
+  return res.status(200).send(pdf);
 }
+
 
 
   // GET /api/orders/me
