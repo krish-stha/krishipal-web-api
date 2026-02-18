@@ -1,7 +1,7 @@
 import mongoose, { Schema, Document } from "mongoose";
 
 export type OrderStatus = "pending" | "confirmed" | "shipped" | "delivered" | "cancelled";
-export type PaymentMethod = "COD";
+export type PaymentMethod = "COD" | "KHALTI" | "ESEWA";
 export type PaymentStatus = "unpaid" | "initiated" | "paid" | "failed";
 export type PaymentGateway = "COD" | "KHALTI" | "ESEWA";
 
@@ -83,6 +83,7 @@ const OrderSchema = new Schema<IOrder>(
 
     address: { type: String, required: true },
 
+
     // existing
     paymentMethod: { type: String, enum: ["COD", "KHALTI", "ESEWA"], default: "COD" },
 
@@ -104,7 +105,7 @@ const OrderSchema = new Schema<IOrder>(
     paymentGateway: {
       type: String,
       enum: ["COD", "KHALTI", "ESEWA"],
-      default: "COD",
+      default: "COD", 
     },
     paymentRef: { type: String, default: null },
     paymentMeta: { type: Schema.Types.Mixed, default: null },

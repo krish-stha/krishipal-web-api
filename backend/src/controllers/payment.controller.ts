@@ -62,12 +62,22 @@ export class PaymentController {
     if (!mongoose.Types.ObjectId.isValid(orderId)) throw new HttpError(400, "Invalid orderId");
 
     const order = await OrderModel.findOne({ _id: orderId, user: userId, deleted_at: null });
+
+
+    
     if (!order) throw new HttpError(404, "Order not found");
 
-    if (order.status !== "pending") throw new HttpError(400, "Only pending orders can be paid");
-    if (order.paymentStatus === "paid") {
-      return res.status(200).json({ success: true, data: { alreadyPaid: true } });
-    }
+// ✅ allow payment only in these statuses
+const st = String(order.status || "").toLowerCase();
+
+if (!["pending", "confirmed", "shipped"].includes(st)) {
+  throw new HttpError(400, "Payment allowed only for pending/confirmed/shipped orders");
+}
+
+if (order.paymentStatus === "paid") {
+  return res.status(200).json({ success: true, data: { alreadyPaid: true } });
+}
+
 
     const amountPaisa = Math.round(Number(order.total || 0) * 100);
     if (!Number.isFinite(amountPaisa) || amountPaisa < 100) {
@@ -151,6 +161,7 @@ export class PaymentController {
       throw new HttpError(400, "Khalti initiate response invalid");
     }
 
+    order.paymentMethod = "KHALTI"; // ✅ important
     order.paymentGateway = "KHALTI";
     order.paymentStatus = "initiated";
     order.paymentRef = pidx;
@@ -177,6 +188,7 @@ export class PaymentController {
     const userId = mustUserId(req);
     const orderId = String(req.body?.orderId || "").trim();
     const pidx = String(req.body?.pidx || "").trim();
+    
 
     if (!mongoose.Types.ObjectId.isValid(orderId)) throw new HttpError(400, "Invalid orderId");
     if (!pidx) throw new HttpError(400, "pidx is required");

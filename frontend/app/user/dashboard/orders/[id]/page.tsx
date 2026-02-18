@@ -62,7 +62,7 @@ export default function TrackOrderPage() {
   // ✅ NEW: refunds state
   const [refunds, setRefunds] = useState<any[]>([]);
 
-  const [paymentChoice, setPaymentChoice] = useState<"COD" | "KHALTI">("KHALTI");
+  const [paymentChoice, setPaymentChoice] = useState<"COD" | "KHALTI">("COD");
 
   const fetchOrder = async () => {
     if (!isValidObjectId(id)) {
@@ -125,7 +125,10 @@ export default function TrackOrderPage() {
   const activeIndex = Math.max(0, steps.indexOf(currentStatus as any));
 
   const canCancel = currentStatus === "pending" && paymentStatus !== "paid";
-  const canPay = currentStatus === "pending" && paymentStatus !== "paid";
+  const canPay =
+  ["pending", "confirmed", "shipped"].includes(currentStatus) &&
+  paymentStatus !== "paid";
+
 
   // ✅ refund only if paid + pending/confirmed
   const canRequestRefund = paymentStatus === "paid" && (currentStatus === "pending" || currentStatus === "confirmed");
@@ -180,24 +183,30 @@ export default function TrackOrderPage() {
   };
 
   const onPay = async () => {
-    setError("");
-    setLoading(true);
-    try {
-      const res = await initiateKhaltiPayment(id);
+  if (paymentChoice !== "KHALTI") {
+    setError("Pay Now is only for Khalti payments.");
+    return;
+  }
 
-      const paymentUrl = res?.data?.payment_url;
-      if (!paymentUrl) {
-        setError("No payment_url received: " + JSON.stringify(res));
-        return;
-      }
+  setError("");
+  setLoading(true);
+  try {
+    const res = await initiateKhaltiPayment(id);
 
-      window.location.href = paymentUrl;
-    } catch (e: any) {
-      setError(e?.response?.data?.message || e?.message || "Failed to initiate Khalti");
-    } finally {
-      setLoading(false);
+    const paymentUrl = res?.data?.payment_url;
+    if (!paymentUrl) {
+      setError("No payment_url received: " + JSON.stringify(res));
+      return;
     }
-  };
+
+    window.location.href = paymentUrl;
+  } catch (e: any) {
+    setError(e?.response?.data?.message || e?.message || "Failed to initiate Khalti");
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   // ✅ FIX: Single prompt only (no double OK)
   // User types: "amount | reason"
@@ -259,11 +268,12 @@ export default function TrackOrderPage() {
             Back
           </Button>
 
-          {canPay && (
-            <Button className="bg-purple-600 hover:bg-purple-700 text-white" onClick={onPay} disabled={loading}>
-              {loading ? "Processing..." : "Pay Now"}
-            </Button>
-          )}
+          {canPay && paymentChoice === "KHALTI" && (
+  <Button className="bg-purple-600 hover:bg-purple-700 text-white" onClick={onPay} disabled={loading}>
+    {loading ? "Processing..." : "Pay Now"}
+  </Button>
+)}
+
 
           {canCancel && (
             <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={onCancel} disabled={loading}>
