@@ -6,6 +6,11 @@ import { CartModel } from "../models/cart.model";
 import { ProductModel } from "../models/product.model";
 import { OrderModel } from "../models/order.model";
 import PDFDocument from "pdfkit";
+import path from "path";
+import fs from "fs";
+import { generateInvoicePdfBuffer } from "../services/invoice.service";
+import { UserModel } from "../models/user.model"; // only if you want customer name/email on invoice
+
 
 
 function mustUserId(req: AuthRequest) {
@@ -182,6 +187,40 @@ export class OrderController {
       session.endSession();
     }
   }
+
+  async downloadMyInvoice(req: AuthRequest, res: Response) {
+  const userId = mustUserId(req);
+  const { id } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) throw new HttpError(400, "Invalid order id");
+
+  const order = await OrderModel.findOne({ _id: id, user: userId, deleted_at: null }).lean();
+  if (!order) throw new HttpError(404, "Order not found");
+
+  // ✅ allow invoice only for paid orders (recommended)
+  if (String(order.paymentStatus).toLowerCase() !== "paid") {
+    throw new HttpError(400, "Invoice available only after payment");
+  }
+
+  const COMPANY_NAME = process.env.COMPANY_NAME || "KrishiPal";
+  const COMPANY_ADDRESS = process.env.COMPANY_ADDRESS || "Kathmandu, Nepal";
+
+  // ✅ IMPORTANT: Logo must exist INSIDE BACKEND project
+  // Put file here: backend/public/logo.png
+  const logoPath = path.resolve(process.cwd(), "public", "logo.png");
+  const safeLogoPath = fs.existsSync(logoPath) ? logoPath : undefined;
+
+  const pdf = await generateInvoicePdfBuffer({
+    order,
+    company: { name: COMPANY_NAME, address: COMPANY_ADDRESS },
+    logoPath: safeLogoPath,
+  });
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `inline; filename="invoice-${id}.pdf"`);
+  return res.status(200).send(pdf);
+}
+
 
   // GET /api/orders/:id/invoice
 async downloadInvoice(req: AuthRequest, res: Response) {

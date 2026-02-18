@@ -7,18 +7,38 @@ import { Card } from "@/app/auth/components/ui/card";
 import { Button } from "@/app/auth/components/ui/button";
 import { cancelMyOrder, getMyOrderById } from "@/lib/api/order";
 import { initiateKhaltiPayment } from "@/lib/api/payment";
+import { endpoints } from "@/lib/api/endpoints";
+import { getToken } from "@/lib/cookie";
+
+// ✅ you already have this
+import { requestRefund, getMyRefunds } from "@/lib/api/refund";
+// if you DON'T have getMyRefunds yet, comment it and refunds UI will still work without crashing.
 
 function money(n: any) {
   const v = Number(n ?? 0);
   return `Rs. ${Number.isFinite(v) ? v : 0}`;
 }
+
 function isValidObjectId(v: string) {
   return /^[a-fA-F0-9]{24}$/.test(v);
 }
+
 function statusLabel(s?: string) {
   const v = String(s || "").toLowerCase();
   if (!v) return "-";
   return v.charAt(0).toUpperCase() + v.slice(1);
+}
+
+function refundStatusBadge(status: string) {
+  const s = String(status || "").toLowerCase();
+  const base = "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold border";
+
+  if (s === "requested") return `${base} bg-amber-50 text-amber-700 border-amber-200`;
+  if (s === "approved") return `${base} bg-blue-50 text-blue-700 border-blue-200`;
+  if (s === "processed") return `${base} bg-green-50 text-green-700 border-green-200`;
+  if (s === "rejected") return `${base} bg-red-50 text-red-700 border-red-200`;
+
+  return `${base} bg-slate-50 text-slate-700 border-slate-200`;
 }
 
 export default function TrackOrderPage() {
@@ -34,10 +54,15 @@ export default function TrackOrderPage() {
   }, [params]);
 
   const [loading, setLoading] = useState(false);
+  const [refundLoading, setRefundLoading] = useState(false);
+
   const [error, setError] = useState("");
   const [order, setOrder] = useState<any>(null);
 
-  const [paymentChoice, setPaymentChoice] = useState<"COD" | "KHALTI">("KHALTI"); // dummy selector
+  // ✅ NEW: refunds state
+  const [refunds, setRefunds] = useState<any[]>([]);
+
+  const [paymentChoice, setPaymentChoice] = useState<"COD" | "KHALTI">("KHALTI");
 
   const fetchOrder = async () => {
     if (!isValidObjectId(id)) {
@@ -58,15 +83,32 @@ export default function TrackOrderPage() {
     }
   };
 
+  // ✅ NEW: fetch refunds (safe)
+  const fetchRefunds = async () => {
+    try {
+      // If you don't have this endpoint yet, this will throw.
+      const res = await getMyRefunds();
+      const all = res?.data || [];
+      const list = all.filter((r: any) => String(r.order) === String(id));
+      setRefunds(list);
+    } catch {
+      // silently ignore (no endpoint yet)
+      setRefunds([]);
+    }
+  };
+
   useEffect(() => {
-    if (id) fetchOrder();
+    if (id) {
+      fetchOrder();
+      fetchRefunds();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   // show a tiny message after redirect
   useEffect(() => {
     const paid = sp.get("paid");
-    if (paid === "1") setError(""); // clear any old error
+    if (paid === "1") setError("");
     if (paid === "0") setError("Payment verification failed. Try again.");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -85,16 +127,12 @@ export default function TrackOrderPage() {
   const canCancel = currentStatus === "pending" && paymentStatus !== "paid";
   const canPay = currentStatus === "pending" && paymentStatus !== "paid";
 
-  const goBackSmart = () => {
-  // if there is real history, go back
-  // if (typeof window !== "undefined" && window.history.length > 1) {
-  //   router.back();
-  //   return;
-  // }
-  // otherwise go to orders page
-  router.push("/user/dashboard/shop");
-};
+  // ✅ refund only if paid + pending/confirmed
+  const canRequestRefund = paymentStatus === "paid" && (currentStatus === "pending" || currentStatus === "confirmed");
 
+  const goBackSmart = () => {
+    router.push("/user/dashboard/shop");
+  };
 
   const onCancel = async () => {
     if (!canCancel) return;
@@ -114,26 +152,98 @@ export default function TrackOrderPage() {
     }
   };
 
-  const onPay = async () => {
-  setError("");
-  setLoading(true);
-  try {
-    const res = await initiateKhaltiPayment(id);
+  const onDownloadInvoice = async () => {
+    try {
+      const token = getToken();
+      if (!token) {
+        setError("Login required to download invoice");
+        return;
+      }
 
-    const paymentUrl = res?.data?.payment_url; // ✅ correct
+      const url = `${process.env.NEXT_PUBLIC_API_URL}${endpoints.orders.invoice(id)}`;
 
-    if (!paymentUrl) {
-      setError("No payment_url received: " + JSON.stringify(res));
-      return;
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt || "Invoice download failed");
+      }
+
+      const blob = await res.blob();
+      const fileUrl = window.URL.createObjectURL(blob);
+      window.open(fileUrl, "_blank");
+    } catch (e: any) {
+      setError(e?.message || "Invoice download failed");
     }
+  };
 
-    window.location.href = paymentUrl;
-  } catch (e: any) {
-    setError(e?.response?.data?.message || e?.message || "Failed to initiate Khalti");
-  } finally {
-    setLoading(false);
-  }
-};
+  const onPay = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      const res = await initiateKhaltiPayment(id);
+
+      const paymentUrl = res?.data?.payment_url;
+      if (!paymentUrl) {
+        setError("No payment_url received: " + JSON.stringify(res));
+        return;
+      }
+
+      window.location.href = paymentUrl;
+    } catch (e: any) {
+      setError(e?.response?.data?.message || e?.message || "Failed to initiate Khalti");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ✅ FIX: Single prompt only (no double OK)
+  // User types: "amount | reason"
+  // example: "200 | wrong amount charged"
+  const onRequestRefund = async () => {
+    if (!canRequestRefund || refundLoading) return;
+
+    try {
+      setError("");
+      setRefundLoading(true);
+
+      const max = Number(order?.total || 0);
+
+      const raw = prompt(
+        `Refund request format:\namount | reason(optional)\n\nExample:\n200 | Wrong amount charged\n\nMax: ${max} Rs`
+      );
+      if (!raw) return;
+
+      const parts = raw.split("|");
+      const amountStr = String(parts[0] || "").trim();
+      const reason = String(parts[1] || "").trim();
+
+      const amount = Number(amountStr);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        setError("Invalid refund amount");
+        return;
+      }
+      if (amount > max) {
+        setError(`Refund amount exceeds max Rs. ${max}`);
+        return;
+      }
+
+      const res = await requestRefund({ orderId: id, amount, reason: reason || undefined });
+
+      // ✅ optimistic add
+      const created = res?.data || res;
+      if (created) setRefunds((prev) => [created, ...prev]);
+
+      // ✅ refresh (if endpoint exists)
+      await fetchRefunds();
+    } catch (e: any) {
+      setError(e?.response?.data?.message || e?.message || "Refund request failed");
+    } finally {
+      setRefundLoading(false);
+    }
+  };
 
   return (
     <div className="p-6">
@@ -145,14 +255,9 @@ export default function TrackOrderPage() {
         </div>
 
         <div className="flex gap-2">
-          <Button
-  variant="outline"
-  className="border-slate-300"
-  onClick={goBackSmart}
->
-  Back
-</Button>
-
+          <Button variant="outline" className="border-slate-300" onClick={goBackSmart}>
+            Back
+          </Button>
 
           {canPay && (
             <Button className="bg-purple-600 hover:bg-purple-700 text-white" onClick={onPay} disabled={loading}>
@@ -247,7 +352,10 @@ export default function TrackOrderPage() {
                           <td className="p-3">
                             <div className="font-semibold text-slate-900">{it?.name || "-"}</div>
                             {it?.slug ? (
-                              <Link href={`/user/dashboard/shop/${it.slug}`} className="text-xs text-slate-500 hover:underline">
+                              <Link
+                                href={`/user/dashboard/shop/${it.slug}`}
+                                className="text-xs text-slate-500 hover:underline"
+                              >
                                 /{it.slug}
                               </Link>
                             ) : (
@@ -273,7 +381,43 @@ export default function TrackOrderPage() {
           <Card className="rounded-2xl p-5">
             <div className="font-semibold text-slate-900 mb-3">Summary</div>
 
-            <div className="flex justify-between text-sm text-slate-600">
+            {paymentStatus === "paid" && (
+              <div className="mt-2 space-y-3">
+                <Button variant="outline" className="border-slate-300 w-full" onClick={onDownloadInvoice}>
+                  Download Invoice (PDF)
+                </Button>
+
+                {canRequestRefund && (
+                  <Button
+                    variant="outline"
+                    className="border-slate-300 w-full"
+                    onClick={onRequestRefund}
+                    disabled={refundLoading}
+                  >
+                    {refundLoading ? "Submitting..." : "Request Refund"}
+                  </Button>
+                )}
+
+                {/* ✅ Refund status list */}
+                {refunds.length > 0 && (
+                  <div className="rounded-xl border bg-slate-50 p-3">
+                    <div className="font-semibold text-slate-900 text-sm mb-2">Refund Requests</div>
+                    <div className="space-y-2">
+                      {refunds.map((r: any) => (
+                        <div key={r._id} className="flex items-center justify-between gap-2">
+                          <div className="text-sm text-slate-700">
+                            Rs. {Math.floor(Number(r.amountPaisa || 0) / 100)}
+                          </div>
+                          <span className={refundStatusBadge(String(r.status))}>{String(r.status).toUpperCase()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex justify-between text-sm text-slate-600 mt-4">
               <span>Subtotal</span>
               <span className="font-semibold text-slate-900">{money(subtotal)}</span>
             </div>
@@ -288,7 +432,6 @@ export default function TrackOrderPage() {
               <span className="font-bold text-slate-900">{money(total)}</span>
             </div>
 
-            {/* ✅ Payment choice (dummy UI but real behavior) */}
             {canPay && (
               <div className="mt-4">
                 <div className="text-sm font-semibold text-slate-900">Payment Method</div>

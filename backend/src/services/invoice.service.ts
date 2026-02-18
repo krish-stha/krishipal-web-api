@@ -1,16 +1,18 @@
 import PDFDocument from "pdfkit";
-import { IOrder } from "../models/order.model";
+import fs from "fs";
 
-function moneyRsFromPaisa(paisa: number) {
-  return `Rs. ${Math.round((paisa || 0) / 100)}`;
+function money(n: any) {
+  const v = Number(n ?? 0);
+  return `Rs. ${Number.isFinite(v) ? v : 0}`;
 }
 
 export async function generateInvoicePdfBuffer(params: {
   order: any; // order lean/object is ok
   company: { name: string; address: string };
   logoPath?: string; // optional local file path
+  user?: any; // ✅ NEW (optional) - backward compatible
 }) {
-  const { order, company, logoPath } = params;
+  const { order, company, logoPath, user } = params;
 
   const doc = new PDFDocument({ size: "A4", margin: 40 });
   const chunks: Buffer[] = [];
@@ -21,74 +23,106 @@ export async function generateInvoicePdfBuffer(params: {
     doc.on("error", reject);
   });
 
-  // Header
+  const pageWidth = doc.page.width;
+  const left = 40;
+  const right = pageWidth - 40;
+
+  // =========================
+  // Header: Logo + Company + INVOICE
+  // =========================
   if (logoPath) {
     try {
-      doc.image(logoPath, 40, 35, { width: 60 });
+      if (fs.existsSync(logoPath)) {
+        doc.image(logoPath, left, 35, { width: 56 });
+      }
     } catch {
       // ignore logo errors
     }
   }
 
   doc
-    .fontSize(18)
-    .text(company.name, 110, 40, { align: "left" })
+    .fillColor("#0f172a")
+    .fontSize(16)
+    .text(company.name, left + 70, 40, { align: "left" })
     .fontSize(10)
-    .fillColor("#334155")
-    .text(company.address, 110, 64, { align: "left" });
+    .fillColor("#475569")
+    .text(company.address, left + 70, 60, { align: "left" });
 
   doc
     .fillColor("#0f172a")
-    .fontSize(20)
+    .fontSize(22)
     .text("INVOICE", 0, 40, { align: "right" });
 
-  doc.moveDown(2);
+  doc.moveTo(left, 95).lineTo(right, 95).strokeColor("#e2e8f0").stroke();
 
+  // =========================
+  // Invoice meta
+  // =========================
   const invoiceNo = `INV-${String(order._id).slice(-8).toUpperCase()}`;
   const created = order?.createdAt ? new Date(order.createdAt).toLocaleString() : "-";
   const paidAt = order?.paidAt ? new Date(order.paidAt).toLocaleString() : "-";
 
-  doc
-    .fontSize(11)
-    .fillColor("#0f172a")
-    .text(`Invoice No: ${invoiceNo}`)
-    .text(`Order ID: ${order._id}`)
-    .text(`Order Date: ${created}`)
-    .text(`Payment: ${String(order.paymentGateway || order.paymentMethod || "COD")}`)
-    .text(`Payment Status: ${String(order.paymentStatus || "unpaid").toUpperCase()}`)
-    .text(`Paid At: ${paidAt}`);
+  const gateway = String(order.paymentGateway || order.paymentMethod || "COD").toUpperCase();
+  const payStatus = String(order.paymentStatus || "unpaid").toUpperCase();
 
+  doc.moveDown(1.2);
+  doc.fillColor("#0f172a").fontSize(11);
+
+  doc.text(`Invoice No: ${invoiceNo}`);
+  doc.text(`Order ID: ${String(order._id)}`);
+  doc.text(`Order Date: ${created}`);
+  doc.text(`Payment Gateway: ${gateway}`);
+  doc.text(`Payment Status: ${payStatus}`);
+  doc.text(`Paid At: ${paidAt}`);
+
+  // =========================
+  // Customer block (optional)
+  // =========================
   doc.moveDown(1);
 
-  // Customer
-  doc.fontSize(12).text("Delivery Address", { underline: true });
-  doc.fontSize(11).fillColor("#334155").text(String(order.address || "-"));
+  doc.fillColor("#0f172a").fontSize(12).text("Customer Details", { underline: true });
+  doc.moveDown(0.4);
+
+  doc.fillColor("#334155").fontSize(10);
+  doc.text(`Name: ${user?.fullName || "-"}`);
+  doc.text(`Email: ${user?.email || "-"}`);
+  const phone =
+    user?.phone ? `${user?.countryCode || ""}${user?.phone || ""}`.trim() : "-";
+  doc.text(`Phone: ${phone}`);
+  doc.moveDown(0.3);
+
+  doc.fillColor("#0f172a").fontSize(12).text("Delivery Address", { underline: true });
+  doc.moveDown(0.4);
+  doc.fillColor("#334155").fontSize(10).text(String(order.address || "-"));
+
+  // =========================
+  // Items table
+  // =========================
   doc.moveDown(1);
 
-  // Items table header
   doc.fillColor("#0f172a").fontSize(12).text("Items", { underline: true });
   doc.moveDown(0.5);
 
-  const startX = 40;
+  const startX = left;
   let y = doc.y;
 
-  const col1 = startX;
-  const col2 = 310;
-  const col3 = 390;
-  const col4 = 460;
+  const colProduct = startX;
+  const colPrice = 330;
+  const colQty = 420;
+  const colTotal = 470;
 
+  // header row
   doc.fontSize(10).fillColor("#475569");
-  doc.text("Product", col1, y);
-  doc.text("Price", col2, y);
-  doc.text("Qty", col3, y);
-  doc.text("Total", col4, y);
+  doc.text("Product", colProduct, y);
+  doc.text("Price", colPrice, y);
+  doc.text("Qty", colQty, y);
+  doc.text("Total", colTotal, y);
 
-  y += 18;
-  doc.moveTo(40, y).lineTo(555, y).strokeColor("#e2e8f0").stroke();
+  y += 16;
+  doc.moveTo(left, y).lineTo(right, y).strokeColor("#e2e8f0").stroke();
+  y += 10;
 
-  y += 8;
-
-  doc.fillColor("#0f172a").strokeColor("#e2e8f0");
+  doc.fillColor("#0f172a").fontSize(10);
 
   const items = order.items || [];
   for (const it of items) {
@@ -96,34 +130,56 @@ export async function generateInvoicePdfBuffer(params: {
     const qty = Number(it.qty || 0);
     const lineTotal = priceRs * qty;
 
-    doc.fontSize(10).text(String(it.name || "-"), col1, y, { width: 250 });
-    doc.text(`Rs. ${priceRs}`, col2, y);
-    doc.text(String(qty), col3, y);
-    doc.text(`Rs. ${lineTotal}`, col4, y);
+    // wrap product name if long
+    doc.text(String(it.name || "-"), colProduct, y, { width: 280 });
+    doc.text(money(priceRs), colPrice, y);
+    doc.text(String(qty), colQty, y);
+    doc.text(money(lineTotal), colTotal, y);
 
     y += 18;
-    if (y > 700) {
+
+    // new page safety
+    if (y > 730) {
       doc.addPage();
       y = 60;
+
+      // redraw header row on new page
+      doc.fontSize(10).fillColor("#475569");
+      doc.text("Product", colProduct, y);
+      doc.text("Price", colPrice, y);
+      doc.text("Qty", colQty, y);
+      doc.text("Total", colTotal, y);
+
+      y += 16;
+      doc.moveTo(left, y).lineTo(right, y).strokeColor("#e2e8f0").stroke();
+      y += 10;
+
+      doc.fillColor("#0f172a").fontSize(10);
     }
   }
 
+  // =========================
+  // Totals
+  // =========================
   doc.moveDown(2);
 
-  // Totals
   const subtotal = Number(order.subtotal || 0);
   const shipping = Number(order.shippingFee || 0);
   const total = Number(order.total || subtotal + shipping);
 
-  doc.fontSize(12).fillColor("#0f172a");
-  doc.text(`Subtotal: Rs. ${subtotal}`, { align: "right" });
-  doc.text(`Shipping: Rs. ${shipping}`, { align: "right" });
-  doc.fontSize(14).text(`Total: Rs. ${total}`, { align: "right" });
+  doc.fillColor("#0f172a").fontSize(11);
+  doc.text(`Subtotal: ${money(subtotal)}`, { align: "right" });
+  doc.text(`Shipping: ${money(shipping)}`, { align: "right" });
+  doc.fontSize(14).text(`Total: ${money(total)}`, { align: "right" });
 
+  // =========================
+  // Footer
+  // =========================
   doc.moveDown(2);
-  doc.fontSize(10).fillColor("#64748b").text("Thank you for shopping with KrishiPal.", {
-    align: "center",
-  });
+  doc.fillColor("#64748b").fontSize(10).text(
+    `Thank you for shopping with ${company.name}.`,
+    { align: "center" }
+  );
 
   doc.end();
   return done;

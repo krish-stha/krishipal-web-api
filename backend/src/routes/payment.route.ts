@@ -14,4 +14,8 @@ router.post("/khalti/verify", protect, asyncHandler(ctrl.khaltiVerify.bind(ctrl)
 
 router.post("/refund/request", protect, asyncHandler(ctrl.requestRefund.bind(ctrl)));
 
+router.post("/refunds/request", protect, asyncHandler(ctrl.requestRefund.bind(ctrl)));
+router.get("/refund/me", protect, asyncHandler(ctrl.myRefundRequests.bind(ctrl)));
+
+
 export default router;

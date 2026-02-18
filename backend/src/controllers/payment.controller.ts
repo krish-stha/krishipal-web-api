@@ -10,7 +10,6 @@ import { RefundRequestModel } from "../models/refund_request.model";
 import { UserModel } from "../models/user.model";
 import { generateInvoicePdfBuffer } from "../services/invoice.service";
 import { sendPaymentReceiptEmail } from "../services/mail.service";
-import { RefundModel } from "../models/refund.model";
 
 function mustUserId(req: AuthRequest) {
   const userId = req.user?.id;
@@ -275,12 +274,17 @@ export class PaymentController {
       // ✅ Auto email with invoice
       try {
         const user = await UserModel.findById(userId).select("fullName email").lean();
+        
         if (user?.email) {
           const invoicePdf = await generateInvoicePdfBuffer({
             order: order.toObject(),
+            user,
             company: { name: COMPANY_NAME, address: COMPANY_ADDRESS },
             logoPath: COMPANY_LOGO_PATH,
-          });
+            
+          }
+        );
+          
 
           await sendPaymentReceiptEmail({
             to: user.email,
@@ -322,6 +326,9 @@ export class PaymentController {
 // POST /api/payments/refunds/request
 // body: { orderId, amount, reason }
 // amount = rupees (eg 10) OR you can send paisa - choose 1 format and stick to it
+// ✅ POST /api/payments/refund/request  (or /refunds/request)
+// body: { orderId, amount, reason }
+// amount = rupees
 async requestRefund(req: AuthRequest, res: Response) {
   const userId = mustUserId(req);
 
@@ -332,27 +339,60 @@ async requestRefund(req: AuthRequest, res: Response) {
   if (!mongoose.Types.ObjectId.isValid(orderId)) throw new HttpError(400, "Invalid orderId");
   if (!Number.isFinite(amountRs) || amountRs <= 0) throw new HttpError(400, "Invalid refund amount");
 
-  const order = await OrderModel.findOne({ _id: orderId, user: userId, deleted_at: null });
+  const order = await OrderModel.findOne({ _id: orderId, user: userId, deleted_at: null }).lean();
   if (!order) throw new HttpError(404, "Order not found");
 
+  // ✅ only paid orders
   if (String(order.paymentStatus).toLowerCase() !== "paid") {
     throw new HttpError(400, "Refund available only for paid orders");
   }
 
-  const maxRs = Number(order.total || 0);
-  if (amountRs > maxRs) throw new HttpError(400, "Refund amount exceeds order total");
+  // ✅ only pending/confirmed (your requirement)
+  const st = String(order.status || "").toLowerCase();
+  if (!["pending", "confirmed"].includes(st)) {
+    throw new HttpError(400, "Refund allowed only for pending/confirmed orders");
+  }
+
+  const orderTotalRs = Number(order.total || 0);
+  if (amountRs > orderTotalRs) throw new HttpError(400, `Refund amount exceeds order total (max ${orderTotalRs})`);
 
   const amountPaisa = Math.round(amountRs * 100);
 
-  const refund = await RefundModel.create({
+  // ✅ prevent requesting more than total across multiple requests
+  const existing = await RefundRequestModel.find({
     order: order._id,
     user: order.user,
-    amount: amountPaisa,
+    status: { $in: ["requested", "approved", "processed"] },
+  }).lean();
+
+  const alreadyRequestedPaisa = existing.reduce((sum, r) => sum + Number(r.amountPaisa || 0), 0);
+  if (alreadyRequestedPaisa + amountPaisa > Math.round(orderTotalRs * 100)) {
+    const maxRemaining = Math.max(0, Math.round(orderTotalRs * 100) - alreadyRequestedPaisa);
+    throw new HttpError(400, `Refund exceeds remaining limit. Max remaining Rs. ${Math.floor(maxRemaining / 100)}`);
+  }
+
+  const refundReq = await RefundRequestModel.create({
+    order: order._id,
+    user: order.user,
+    amountPaisa,
     reason: reason || null,
     status: "requested",
   });
 
-  return res.status(201).json({ success: true, data: refund });
+  return res.status(201).json({ success: true, data: refundReq });
 }
+
+async myRefundRequests(req: AuthRequest, res: Response) {
+  const userId = mustUserId(req);
+
+  const rows = await RefundRequestModel.find({ user: userId })
+    .sort({ createdAt: -1 })
+    .limit(50)
+    .lean();
+
+  return res.status(200).json({ success: true, data: rows });
+}
+
+
 
 }

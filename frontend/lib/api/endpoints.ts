@@ -34,6 +34,13 @@ export const endpoints = {
     orders: "/admin/orders",
     orderById: (id: string) => `/admin/orders/${id}`,
     orderUpdateStatus: (id: string) => `/admin/orders/${id}/status`,
+    orderInvoice: (id: string) => `/admin/orders/${id}/invoice`,
+
+    paymentLogs: "/admin/payments/logs",
+    refunds: "/admin/payments/refunds",
+    refundApprove: (id: string) => `/admin/payments/refunds/${id}/approve`,
+    refundReject: (id: string) => `/admin/payments/refunds/${id}/reject`,
+    refundProcessed: (id: string) => `/admin/payments/refunds/${id}/processed`,
     
 
   },
@@ -59,6 +66,11 @@ export const endpoints = {
     myOrders: "/orders/me",
     byId: (id: string) => `/orders/${id}`,
     cancel: (id: string) => `/orders/${id}/cancel`,
+    invoice: (id: string) => `/orders/${id}/invoice`,
   },
+  payments: {
+  refundRequest: "/payments/refund/request",
+  myRefunds: "/payments/refund/me",
+},
 
 };
