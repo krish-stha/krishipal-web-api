@@ -71,6 +71,13 @@ export const endpoints = {
   payments: {
   refundRequest: "/payments/refund/request",
   myRefunds: "/payments/refund/me",
+  // khalti (if you already have)
+  khaltiInitiate: "/api/payments/khalti/initiate",
+  khaltiVerify: "/api/payments/khalti/verify",
+
+  // ✅ esewa
+  esewaInitiate: "/payments/esewa/initiate",
+  esewaVerify: "/payments/esewa/verify",
 },
 
 };

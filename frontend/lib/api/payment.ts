@@ -22,3 +22,11 @@ export async function getMyRefunds() {
   const res = await api.get(endpoints.payments.myRefunds);
   return res.data;
 }
+
+export async function initiateEsewaPayment(orderId: string) {
+  return api.post(endpoints.payments.esewaInitiate, { orderId });
+}
+
+export async function verifyEsewaPayment(payload: { orderId: string; data: string }) {
+  return api.post(endpoints.payments.esewaVerify, payload);
+}

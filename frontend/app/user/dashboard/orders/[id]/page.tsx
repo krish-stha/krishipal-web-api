@@ -62,7 +62,7 @@ export default function TrackOrderPage() {
   // ✅ NEW: refunds state
   const [refunds, setRefunds] = useState<any[]>([]);
 
-  const [paymentChoice, setPaymentChoice] = useState<"COD" | "KHALTI">("COD");
+  const [paymentChoice, setPaymentChoice] = useState<"COD" | "KHALTI" | "ESEWA">("COD");
 
   const fetchOrder = async () => {
     if (!isValidObjectId(id)) {
@@ -183,28 +183,29 @@ export default function TrackOrderPage() {
   };
 
   const onPay = async () => {
-  if (paymentChoice !== "KHALTI") {
-    setError("Pay Now is only for Khalti payments.");
+  setError("");
+
+  if (paymentChoice === "KHALTI") {
+    setLoading(true);
+    try {
+      const res = await initiateKhaltiPayment(id);
+      const paymentUrl = res?.data?.payment_url;
+      if (!paymentUrl) throw new Error("No payment_url received");
+      window.location.href = paymentUrl;
+    } catch (e: any) {
+      setError(e?.response?.data?.message || e?.message || "Failed to initiate Khalti");
+    } finally {
+      setLoading(false);
+    }
     return;
   }
 
-  setError("");
-  setLoading(true);
-  try {
-    const res = await initiateKhaltiPayment(id);
-
-    const paymentUrl = res?.data?.payment_url;
-    if (!paymentUrl) {
-      setError("No payment_url received: " + JSON.stringify(res));
-      return;
-    }
-
-    window.location.href = paymentUrl;
-  } catch (e: any) {
-    setError(e?.response?.data?.message || e?.message || "Failed to initiate Khalti");
-  } finally {
-    setLoading(false);
+  if (paymentChoice === "ESEWA") {
+    router.push(`/payments/esewa/redirect?orderId=${id}`);
+    return;
   }
+
+  setError("Pay Now is only for Khalti/eSewa payments.");
 };
 
 
@@ -268,11 +269,18 @@ export default function TrackOrderPage() {
             Back
           </Button>
 
-          {canPay && paymentChoice === "KHALTI" && (
-  <Button className="bg-purple-600 hover:bg-purple-700 text-white" onClick={onPay} disabled={loading}>
-    {loading ? "Processing..." : "Pay Now"}
-  </Button>
-)}
+          
+        {canPay && (paymentChoice === "KHALTI" || paymentChoice === "ESEWA") && (
+          <Button
+            className={paymentChoice === "KHALTI"
+              ? "bg-purple-600 hover:bg-purple-700 text-white"
+              : "bg-green-600 hover:bg-green-700 text-white"}
+            onClick={onPay}
+            disabled={loading}
+          >
+            {loading ? "Processing..." : `Pay Now (${paymentChoice})`}
+          </Button>
+        )}
 
 
           {canCancel && (
@@ -463,6 +471,11 @@ export default function TrackOrderPage() {
                       onChange={() => setPaymentChoice("KHALTI")}
                     />
                     Khalti
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" name="pay" checked={paymentChoice === "ESEWA"} onChange={() => setPaymentChoice("ESEWA")} />
+                   eSewa
                   </label>
                 </div>
               </div>
