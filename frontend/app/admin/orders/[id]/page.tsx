@@ -13,6 +13,7 @@ function money(n: any) {
 
 const STATUS = ["pending", "confirmed", "shipped", "delivered", "cancelled"] as const;
 
+
 function StatusPill({ status }: { status?: string }) {
   const s = String(status || "pending").toLowerCase();
   const base = "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset";
@@ -26,6 +27,15 @@ function StatusPill({ status }: { status?: string }) {
   return <span className={`${base} ${map[s] || "bg-slate-50 text-slate-700 ring-slate-200"}`}>{s}</span>;
 }
 
+function paymentStatusPill(ps?: string) {
+  const s = String(ps || "unpaid").toLowerCase();
+  const base = "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold border";
+  if (s === "paid") return `${base} bg-green-50 text-green-700 border-green-200`;
+  if (s === "initiated") return `${base} bg-blue-50 text-blue-700 border-blue-200`;
+  if (s === "failed") return `${base} bg-red-50 text-red-700 border-red-200`;
+  return `${base} bg-slate-50 text-slate-700 border-slate-200`;
+}
+
 export default function AdminOrderDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -36,6 +46,8 @@ export default function AdminOrderDetailPage() {
   const [order, setOrder] = useState<any>(null);
 
   const [nextStatus, setNextStatus] = useState<string>("pending");
+  const paymentGateway = String(order?.paymentGateway || order?.paymentMethod || "COD").toUpperCase();
+  const paymentStatus = String(order?.paymentStatus || "unpaid").toLowerCase();
 
   const fetchOrder = async () => {
     setLoading(true);
@@ -227,7 +239,23 @@ export default function AdminOrderDetailPage() {
                 <div className="mt-4 grid gap-3">
                   <div className="rounded-2xl bg-slate-50 p-3 ring-1 ring-inset ring-slate-200">
                     <div className="text-xs text-slate-500">Payment</div>
-                    <div className="mt-1 font-medium text-slate-900">{order?.paymentMethod || "COD"}</div>
+
+  <div className="mt-1 flex items-center justify-between gap-2">
+    <div className="font-medium text-slate-900">{paymentGateway}</div>
+    <span className={paymentStatusPill(paymentStatus)}>{paymentStatus.toUpperCase()}</span>
+  </div>
+
+  <div className="mt-2 text-xs text-slate-500 space-y-1">
+    
+
+    {order?.paidAt ? (
+      <div>
+        Paid At: <b className="text-slate-700">{new Date(order.paidAt).toLocaleString()}</b>
+      </div>
+    ) : null}
+  </div>
+                    
+  
                   </div>
 
                   <div className="rounded-2xl bg-slate-50 p-3 ring-1 ring-inset ring-slate-200">
