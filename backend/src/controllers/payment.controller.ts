@@ -11,6 +11,7 @@ import { UserModel } from "../models/user.model";
 import { generateInvoicePdfBuffer } from "../services/invoice.service";
 import { sendPaymentReceiptEmail } from "../services/mail.service";
 import crypto from "crypto";
+import { InventoryOrderService } from "../services/inventory.order.service";
 
 function mustUserId(req: AuthRequest) {
   const userId = req.user?.id;
@@ -298,14 +299,18 @@ if (order.paymentStatus === "paid") {
     const info = khaltiLookup?.data || {};
     const status = String(info?.status || "").toLowerCase();
 
+
     order.paymentGateway = "KHALTI";
     order.paymentMeta = info;
     order.paymentRef = pidx;
 
     if (status === "completed") {
+    const invOrder = new InventoryOrderService();
+
       order.paymentStatus = "paid";
       order.paidAt = new Date();
       await order.save();
+      await invOrder.applyPaidOrderStockOut(String(order._id), String(order.user));
 
       await logPayment({
         orderId,
@@ -660,9 +665,12 @@ try {
 
   // ✅ Mark paid only if COMPLETE
   if (stStatus === "COMPLETE") {
+  const invOrder = new InventoryOrderService();
+
     order.paymentStatus = "paid";
     order.paidAt = new Date();
     await order.save();
+    await invOrder.applyPaidOrderStockOut(String(order._id), String(order.user));
 
     await logPayment({
       orderId,

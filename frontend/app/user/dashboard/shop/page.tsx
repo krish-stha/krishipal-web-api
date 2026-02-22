@@ -112,6 +112,7 @@ export default function ShopPage() {
     setPage(1);
     await fetchProducts(1, "replace");
   };
+  
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
@@ -239,6 +240,7 @@ export default function ShopPage() {
                     >
                       All Categories
                     </button>
+                    
 
                     <div className="max-h-[420px] overflow-auto pr-1 pt-1">
                       {!catsLoading && categories.length === 0 ? (
@@ -311,6 +313,7 @@ export default function ShopPage() {
 
                   const displayPrice = hasDiscount ? p.discountPrice : p.price;
                   const inStock = Number(p.stock ?? 0) > 0;
+                  const low = inStock && Number(p.stock ?? 0) <= 5;
 
                   return (
                     <div
@@ -335,6 +338,16 @@ export default function ShopPage() {
                                 Sale
                               </span>
                             )}
+
+                            {low && (
+  <span className="text-xs px-2 py-1 rounded-full bg-amber-50 text-amber-700 font-semibold">
+    Low stock
+  </span>
+)}
+
+
+
+
                             {!inStock && (
                               <span className="text-xs px-2 py-1 rounded-full bg-slate-200 text-slate-700 font-semibold">
                                 Out

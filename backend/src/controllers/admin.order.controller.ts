@@ -13,6 +13,7 @@
   // ✅ import your mail function (add this in mail.service.ts as I showed)
   import { sendOrderStatusEmail } from "../services/mail.service";
   import { sendPaymentReceiptEmail } from "../services/mail.service";
+import { InventoryOrderService } from "../services/inventory.order.service";
 
   const ALLOWED_STATUS = ["pending", "confirmed", "shipped", "delivered", "cancelled"] as const;
 
@@ -162,6 +163,12 @@ async updateStatus(req: AuthRequest, res: Response) {
   }
 
   await order.save();
+
+if (codJustPaid) {
+  const invOrder = new InventoryOrderService();
+
+  await invOrder.applyPaidOrderStockOut(String(order._id), req.user?.id ?? null);
+}
 
   const user: any = (order as any).user;
   const to = user?.email;

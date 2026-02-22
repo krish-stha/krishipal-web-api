@@ -9,7 +9,6 @@ const ctrl = new AdminCartController();
 // /api/admin/carts
 // router.get("/", protect, asyncHandler(ctrl.list.bind(ctrl)));
 router.get("/", (req, res, next) => {
-  console.log("✅ ADMIN CART LIST HIT:", req.originalUrl);
   next();
 }, protect, asyncHandler(ctrl.list.bind(ctrl)));
 

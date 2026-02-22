@@ -41,6 +41,11 @@ export const endpoints = {
     refundApprove: (id: string) => `/admin/payments/refunds/${id}/approve`,
     refundReject: (id: string) => `/admin/payments/refunds/${id}/reject`,
     refundProcessed: (id: string) => `/admin/payments/refunds/${id}/processed`,
+
+    inventoryStockIn: "/admin/inventory/stock-in",
+    inventoryStockOut: "/admin/inventory/stock-out",
+    inventoryLogs: "/admin/inventory/logs",
+    inventoryLowStock: "/admin/inventory/low-stock",
     
 
   },

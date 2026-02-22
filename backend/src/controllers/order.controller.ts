@@ -108,17 +108,7 @@ export class OrderController {
       session.startTransaction();
 
       // decrement stock for each product
-      for (const it of orderItems) {
-        const ok = await ProductModel.updateOne(
-          { _id: it.product, deleted_at: null, status: "active", stock: { $gte: it.qty } },
-          { $inc: { stock: -it.qty } },
-          { session }
-        );
-
-        if (ok.modifiedCount !== 1) {
-          throw new HttpError(400, `Stock changed for ${it.name}, try again`);
-        }
-      }
+      
 
       const created = await OrderModel.create(
         [
@@ -156,15 +146,7 @@ export class OrderController {
       // - if any fail, stop and tell user
       // NOTE: This is best-effort without true atomicity.
       if (String(err?.message || "").includes("Transaction numbers are only allowed")) {
-        for (const it of orderItems) {
-          const ok = await ProductModel.updateOne(
-            { _id: it.product, deleted_at: null, status: "active", stock: { $gte: it.qty } },
-            { $inc: { stock: -it.qty } }
-          );
-          if (ok.modifiedCount !== 1) {
-            throw new HttpError(400, `Stock changed for ${it.name}, try again`);
-          }
-        }
+        
 
         const created = await OrderModel.create({
           user: new mongoose.Types.ObjectId(userId),
@@ -371,16 +353,7 @@ async cancelMyOrder(req: AuthRequest, res: Response) {
     }
 
     // restore stock
-    for (const it of order.items || []) {
-      const qty = Number((it as any).qty || 0);
-      if (qty > 0) {
-        await ProductModel.updateOne(
-          { _id: (it as any).product, deleted_at: null },
-          { $inc: { stock: qty } },
-          { session }
-        );
-      }
-    }
+   
 
     // update order fields
     order.status = "cancelled";

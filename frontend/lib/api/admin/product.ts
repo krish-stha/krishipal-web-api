@@ -1,8 +1,8 @@
 import { api } from "../axios";
 import { endpoints } from "../endpoints";
 
-export async function adminListProducts() {
-  const res = await api.get(endpoints.admin.products);
+export async function adminListProducts(params?: { page?: number; limit?: number; search?: string}  ) {
+  const res = await api.get(endpoints.admin.products, { params });
   return res.data;
 }
 
