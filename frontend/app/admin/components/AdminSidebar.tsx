@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { FileText } from "lucide-react";
 import {
   LayoutDashboard,
   Users,
@@ -81,6 +82,8 @@ export function AdminSidebar() {
         <NavItem href="/admin/payments" label="Payments" icon={CreditCard} />
 
       </nav>
+
+      <NavItem href="/admin/blogs" label="Blogs" icon={FileText} />
 
       <SectionTitle title="CUSTOMERS" />
       <nav className="space-y-1">

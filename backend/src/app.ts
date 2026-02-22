@@ -23,6 +23,8 @@ import adminOrderRoutes from "./routes/admin.order.route";
 
 // ✅ ADD THIS
 import adminCartRoutes from "./routes/admin.cart.route";
+import adminBlogRoutes from "./routes/admin.blog.routes";
+import blogRoutes from "./routes/blog.routes";
 
 const app = express();
 
@@ -59,6 +61,7 @@ app.use("/api/admin", adminProductRoutes);
 // ✅ ADD THIS (NO BREAKING)
 
 // ✅ Public + user modules
+app.use("/api", blogRoutes);
 app.use("/api", publicProductRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/admin/carts", adminCartRoutes);
@@ -67,6 +70,8 @@ app.use("/api/admin", adminOrderRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/admin", adminPaymentRoutes);
 app.use("/api/admin", adminInventoryRoutes);
+app.use("/api/admin", adminBlogRoutes);
+
 
 
 

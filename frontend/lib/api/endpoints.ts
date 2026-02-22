@@ -46,6 +46,9 @@ export const endpoints = {
     inventoryStockOut: "/admin/inventory/stock-out",
     inventoryLogs: "/admin/inventory/logs",
     inventoryLowStock: "/admin/inventory/low-stock",
+
+    blogs: "/admin/blogs",
+    blogById: (id: string) => `/admin/blogs/${id}`,
     
 
   },
@@ -55,6 +58,9 @@ export const endpoints = {
     products: "/products",
     productBySlug: (slug: string) => `/products/${slug}`,
     categories: "/categories", // (we'll add public categories below if you have route; if not, we’ll fetch admin categories later)
+
+    blogs: "/blogs",
+    blogBySlug: (slug: string) => `/blogs/${slug}`,
   },
 
   // ✅ CART
