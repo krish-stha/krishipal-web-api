@@ -78,8 +78,10 @@ export class BlogService {
   }
 
   adminGetById(id: string) {
-    return BlogModel.findOne({ _id: id, deleted_at: null }).lean();
-  }
+  return BlogModel.findOne({ _id: id, deleted_at: null }) 
+    .select("title slug excerpt content coverImage tags status publishedAt createdAt updatedAt")
+    .lean();
+}
 
   async adminUpdate(id: string, payload: any, coverFile?: Express.Multer.File | null) {
     const existing = await BlogModel.findOne({ _id: id, deleted_at: null });
@@ -169,7 +171,7 @@ export class BlogService {
       deleted_at: null,
       status: "published",
     })
-      .select("title slug excerpt content coverImage tags publishedAt createdAt")
+      .select("title slug excerpt content coverImage tags publishedAt createdAt updatedAt")
       .lean();
   }
 }

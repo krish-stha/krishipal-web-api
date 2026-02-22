@@ -28,3 +28,7 @@ export async function adminDeleteBlog(id: string) {
   const res = await api.delete(endpoints.admin.blogById(id));
   return res.data;
 }
+
+export async function adminGetBlogById(id: string) {
+  return api.get(`/admin/blogs/${id}`);
+}

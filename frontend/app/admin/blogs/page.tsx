@@ -9,6 +9,7 @@ import {
   adminListBlogs,
   adminUpdateBlog,
   AdminBlogStatus,
+  adminGetBlogById,
 } from "@/lib/api/admin/blog";
 
 type Blog = {
@@ -17,7 +18,7 @@ type Blog = {
   slug: string;
   excerpt?: string;
   content?: string;
-  cover?: string | null;
+  coverImage?: string | null;
   status: AdminBlogStatus;
   createdAt?: string;
   updatedAt?: string;
@@ -111,7 +112,6 @@ export default function AdminBlogsPage() {
 
     const fd = new FormData();
     fd.append("title", title.trim());
-    fd.append("slug", slug.trim());
     fd.append("excerpt", excerpt.trim());
     fd.append("content", content.trim());
     fd.append("status", status);
@@ -136,15 +136,26 @@ export default function AdminBlogsPage() {
     }
   };
 
-  const startEdit = (b: Blog) => {
-    setEditingId(b._id);
-    setETitle(b.title || "");
-    setESlug(b.slug || "");
-    setEExcerpt(b.excerpt || "");
-    setEContent(b.content || "");
-    setEStatus(b.status || "draft");
+  const startEdit = async (b: Blog) => {
+  setLoading(true);
+  setError("");
+  try {
+    const res = await adminGetBlogById(b._id);
+    const full = res?.data?.data; // { success:true, data: blog }
+
+    setEditingId(full._id);
+    setETitle(full.title || "");
+    setESlug(full.slug || "");
+    setEExcerpt(full.excerpt || "");
+    setEContent(full.content || ""); // ✅ now content comes from detail api
+    setEStatus(full.status || "draft");
     setECover(null);
-  };
+  } catch (e: any) {
+    setError(e?.response?.data?.message || e?.message || "Failed to load blog");
+  } finally {
+    setLoading(false);
+  }
+};
 
   const cancelEdit = () => {
     setEditingId(null);
