@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { ShoppingCart, LogOut } from "lucide-react";
+import { ShoppingCart, LogOut, Package } from "lucide-react"; // ✅ added Package icon (optional)
 import { Button } from "@/app/auth/components/ui/button";
 import { useAuth } from "@/lib/contexts/auth-contexts";
 import Cookies from "js-cookie";
 import { useEffect, useMemo, useState } from "react";
+import { useCart } from "@/lib/contexts/cart-context";
+
 import {
   Sheet,
   SheetContent,
@@ -51,13 +53,16 @@ function normalizePhotoUrl(photo: string | null): string | null {
   if (photo.startsWith("http://") || photo.startsWith("https://")) return photo;
 
   // filename only -> /public/profile_photo/<filename>
-  if (!photo.includes("/")) return `${BACKEND_URL}/public/profile_photo/${photo}`;
+  if (!photo.includes("/"))
+    return `${BACKEND_URL}/public/profile_photo/${photo}`;
 
   if (photo.startsWith("public/")) return `${BACKEND_URL}/${photo}`;
   if (photo.startsWith("/public/")) return `${BACKEND_URL}${photo}`;
 
-  if (photo.startsWith("profile_photo/")) return `${BACKEND_URL}/public/${photo}`;
-  if (photo.startsWith("/profile_photo/")) return `${BACKEND_URL}/public${photo}`;
+  if (photo.startsWith("profile_photo/"))
+    return `${BACKEND_URL}/public/${photo}`;
+  if (photo.startsWith("/profile_photo/"))
+    return `${BACKEND_URL}/public${photo}`;
 
   if (!photo.startsWith("/")) return `${BACKEND_URL}/${photo}`;
   return `${BACKEND_URL}${photo}`;
@@ -106,6 +111,7 @@ function initials(name?: string, email?: string) {
 
 export function Header() {
   const { user, isLoading, logout } = useAuth();
+  const { count } = useCart(); // ✅ FIX: now count exists
 
   // ✅ control sheet open/close
   const [profileOpen, setProfileOpen] = useState(false);
@@ -190,6 +196,17 @@ export function Header() {
           >
             Shop
           </Link>
+
+          {/* ✅ ADD MY ORDERS HERE (Professional placement: after Shop) */}
+          {user && (
+            <Link
+              href="/user/dashboard/orders"
+              className="text-gray-700 hover:text-green-600"
+            >
+              My Orders
+            </Link>
+          )}
+
           <Link
             href="/user/dashboard/search"
             className="text-gray-700 hover:text-green-600"
@@ -212,7 +229,7 @@ export function Header() {
           <Link href="/user/dashboard/cart" className="relative">
             <ShoppingCart className="h-6 w-6 text-gray-700" />
             <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-              0
+              {count}
             </span>
           </Link>
 
@@ -247,6 +264,17 @@ export function Header() {
                 </SheetHeader>
 
                 <div className="mt-6 space-y-6">
+                  {/* ✅ OPTIONAL: Add My Orders in the profile panel too (mobile friendly) */}
+                  <Link
+                    href="/user/dashboard/orders"
+                    onClick={() => setProfileOpen(false)}
+                    className="flex items-center gap-2 rounded-xl border bg-white px-4 py-3 text-sm text-slate-700 hover:bg-slate-50"
+                  >
+                    <Package className="h-4 w-4 text-slate-600" />
+                    <span className="font-semibold">My Orders</span>
+                    <span className="ml-auto text-xs text-slate-500">Track</span>
+                  </Link>
+
                   <UserProfilePanel />
 
                   <Button
@@ -273,7 +301,7 @@ export function Header() {
             </Link>
           )}
         </div>
-      </div>
+      </div> 
     </header>
   );
 }

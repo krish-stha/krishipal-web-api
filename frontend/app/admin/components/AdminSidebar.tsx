@@ -12,6 +12,8 @@ import {
   Settings,
   Boxes,
 } from "lucide-react";
+import { CreditCard } from "lucide-react";
+
 
 function SectionTitle({ title }: { title: string }) {
   return (
@@ -76,6 +78,8 @@ export function AdminSidebar() {
         <NavItem href="/admin/inventory" label="Inventory" icon={Boxes} />
         <NavItem href="/admin/cart" label="Cart" icon={ShoppingCart} />
         <NavItem href="/admin/orders" label="Orders" icon={PackageSearch} />
+        <NavItem href="/admin/payments" label="Payments" icon={CreditCard} />
+
       </nav>
 
       <SectionTitle title="CUSTOMERS" />
