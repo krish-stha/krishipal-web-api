@@ -6,8 +6,6 @@ import authRoutes from "./routes/auth.route";
 import addressBatchRoutes from "./routes/address_batch_route";
 import adminUserRoutes from "./routes/admin.user.route";
 import { errorHandler } from "./middleware/error.middleware";
-
-// ✅ add these
 import adminCategoryRoutes from "./routes/admin.category.route";
 import adminProductRoutes from "./routes/admin.product.route";
 import publicProductRoutes from "./routes/public.product.route";
@@ -16,15 +14,12 @@ import publicCategoryRoutes from "./routes/public.category.route";
 import paymentRoutes from "./routes/payment.route";
 import adminPaymentRoutes from "./routes/admin.payment.route";
 import adminInventoryRoutes from "./routes/admin.inventory.route";
-
-
 import orderRoutes from "./routes/order.route";
 import adminOrderRoutes from "./routes/admin.order.route";
-
-// ✅ ADD THIS
 import adminCartRoutes from "./routes/admin.cart.route";
 import adminBlogRoutes from "./routes/admin.blog.routes";
 import blogRoutes from "./routes/blog.routes";
+import adminDashboardRoutes from "./routes/admin.dashboard.route";
 
 const app = express();
 
@@ -38,8 +33,6 @@ app.use(
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
-
-
 
 app.use(express.json());
 
@@ -71,6 +64,7 @@ app.use("/api/payments", paymentRoutes);
 app.use("/api/admin", adminPaymentRoutes);
 app.use("/api/admin", adminInventoryRoutes);
 app.use("/api/admin", adminBlogRoutes);
+app.use("/api/admin", adminDashboardRoutes);
 
 
 
