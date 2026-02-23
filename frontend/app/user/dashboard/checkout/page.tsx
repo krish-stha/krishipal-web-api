@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Header } from "@/app/user/component/header";
 import { Footer } from "@/app/user/component/footer";
@@ -8,6 +8,10 @@ import { Button } from "@/app/auth/components/ui/button";
 import { Card } from "@/app/auth/components/ui/card";
 import { useCart } from "@/lib/contexts/cart-context";
 import { createOrder } from "@/lib/api/order";
+import { getPublicSettings } from "@/lib/api/settings";
+import { initiateKhaltiPayment } from "@/lib/api/payment";
+
+type PaymentMethod = "COD" | "KHALTI" | "ESEWA";
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -17,6 +21,33 @@ export default function CheckoutPage() {
   const [address, setAddress] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  const [settings, setSettings] = useState<any>(null);
+  const [pay, setPay] = useState<PaymentMethod>("COD");
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await getPublicSettings();
+        const s = res?.data || null;
+        setSettings(s);
+
+        // pick first enabled payment as default
+        const p = s?.payments || {};
+        const firstEnabled: PaymentMethod | null =
+          p.COD ? "COD" : p.KHALTI ? "KHALTI" : p.ESEWA ? "ESEWA" : null;
+
+        if (firstEnabled) setPay(firstEnabled);
+      } catch {
+        // if settings fail, fallback (don’t block checkout)
+        setSettings({
+          shippingFeeDefault: 0,
+          freeShippingThreshold: null,
+          payments: { COD: true, KHALTI: true, ESEWA: true },
+        });
+      }
+    })();
+  }, []);
 
   const subtotal = useMemo(() => {
     return items.reduce(
@@ -29,32 +60,60 @@ export default function CheckoutPage() {
     return items.some((it: any) => Number(it?.product?.stock ?? 0) <= 0);
   }, [items]);
 
+  const shippingFee = useMemo(() => {
+    const def = Number(settings?.shippingFeeDefault ?? 0);
+    const thrRaw = settings?.freeShippingThreshold;
+    const thr =
+      thrRaw === null || thrRaw === undefined ? null : Number(thrRaw);
+
+    let fee = Math.max(0, def);
+    if (thr !== null && Number.isFinite(thr) && subtotal >= thr) fee = 0;
+    return fee;
+  }, [settings, subtotal]);
+
+  const total = subtotal + shippingFee;
+
+  const payments = settings?.payments || { COD: true, KHALTI: true, ESEWA: true };
+
   const placeOrder = async () => {
     setError("");
-    if (!address.trim()) {
-      setError("Address is required.");
-      return;
-    }
-    if (items.length === 0) {
-      setError("Cart is empty.");
-      return;
-    }
-    if (hasOutOfStock) {
-      setError("Remove out-of-stock items to continue.");
-      return;
+    if (!address.trim()) return setError("Address is required.");
+    if (items.length === 0) return setError("Cart is empty.");
+    if (hasOutOfStock) return setError("Remove out-of-stock items to continue.");
+
+    // final safety check
+    if ((pay === "COD" && !payments.COD) || (pay === "KHALTI" && !payments.KHALTI) || (pay === "ESEWA" && !payments.ESEWA)) {
+      return setError("Selected payment method is disabled.");
     }
 
     setBusy(true);
     try {
-      const res = await createOrder({ address: address.trim(), paymentMethod: "COD" });
+      const res = await createOrder({ address: address.trim(), paymentMethod: pay });
 
-      // backend response: { success:true, data: createdOrder }
-      const orderId = res?.data?._id || res?.data?.id || res?.data?._id;
+      const order = res?.data; // your API returns { success, data }
+      const orderId = order?._id || order?.id;
 
-      await refresh(); // cart cleared in backend, reflect in UI
+      await refresh();
 
-      if (orderId) router.push(`/user/dashboard/orders/${orderId}`);
-      else router.push("/user/dashboard/orders");
+      if (!orderId) {
+        router.push("/user/dashboard/orders");
+        return;
+      }
+
+      // if online payment selected, go straight to payment flow
+      if (pay === "KHALTI") {
+  const p = await initiateKhaltiPayment(orderId);
+  const paymentUrl = p?.data?.payment_url; // because your API returns { success, data: {...} }
+  if (!paymentUrl) throw new Error("No payment_url received");
+  window.location.href = paymentUrl;
+  return;
+}
+      if (pay === "ESEWA") {
+        router.push(`/payments/esewa/redirect?orderId=${orderId}`);
+        return;
+      }
+
+      router.push(`/user/dashboard/orders/${orderId}`);
     } catch (e: any) {
       setError(e?.response?.data?.message || e?.message || "Failed to place order");
     } finally {
@@ -71,7 +130,7 @@ export default function CheckoutPage() {
           <div className="mb-6">
             <div className="text-sm text-slate-500">Shop / Checkout</div>
             <h1 className="text-3xl font-bold text-slate-900">Checkout</h1>
-            <p className="text-slate-600 mt-1">Cash on Delivery (COD) — for now.</p>
+            <p className="text-slate-600 mt-1">Shipping + payment options are controlled by admin settings.</p>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -90,6 +149,34 @@ export default function CheckoutPage() {
                   placeholder="Eg: Jhapa, Birtamode-05, near ... Phone: 98xxxxxxxx"
                 />
 
+                <div className="mt-5">
+                  <div className="font-semibold text-slate-900">Payment Method</div>
+                  <div className="mt-2 flex flex-wrap gap-4 text-sm">
+                    {payments.COD && (
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="pay" checked={pay === "COD"} onChange={() => setPay("COD")} />
+                        COD
+                      </label>
+                    )}
+                    {payments.KHALTI && (
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="pay" checked={pay === "KHALTI"} onChange={() => setPay("KHALTI")} />
+                        Khalti
+                      </label>
+                    )}
+                    {payments.ESEWA && (
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="pay" checked={pay === "ESEWA"} onChange={() => setPay("ESEWA")} />
+                        eSewa
+                      </label>
+                    )}
+
+                    {!payments.COD && !payments.KHALTI && !payments.ESEWA && (
+                      <div className="text-xs text-rose-600">No payment methods enabled (admin settings).</div>
+                    )}
+                  </div>
+                </div>
+
                 {error && <div className="mt-3 text-sm text-red-600">{error}</div>}
 
                 <div className="mt-5 flex gap-2">
@@ -105,9 +192,9 @@ export default function CheckoutPage() {
                   <Button
                     className="bg-green-600 hover:bg-green-700 text-white"
                     onClick={placeOrder}
-                    disabled={busy || loading}
+                    disabled={busy || loading || (!payments.COD && !payments.KHALTI && !payments.ESEWA)}
                   >
-                    {busy ? "Placing..." : "Place Order (COD)"}
+                    {busy ? "Placing..." : `Place Order (${pay})`}
                   </Button>
                 </div>
               </Card>
@@ -128,13 +215,19 @@ export default function CheckoutPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-600">Shipping</span>
-                    <span className="font-semibold">Rs. 0</span>
+                    <span className="font-semibold">Rs. {shippingFee}</span>
                   </div>
                   <div className="border-t pt-2 flex justify-between">
                     <span className="text-slate-900 font-bold">Total</span>
-                    <span className="text-slate-900 font-bold">Rs. {subtotal}</span>
+                    <span className="text-slate-900 font-bold">Rs. {total}</span>
                   </div>
                 </div>
+
+                {settings?.freeShippingThreshold !== null && settings?.freeShippingThreshold !== undefined && (
+                  <div className="mt-3 text-xs text-slate-500">
+                    Free shipping over: <b>Rs. {Number(settings.freeShippingThreshold)}</b>
+                  </div>
+                )}
 
                 {hasOutOfStock && (
                   <div className="mt-4 text-xs text-red-600">

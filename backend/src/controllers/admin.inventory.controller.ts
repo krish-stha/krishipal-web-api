@@ -3,8 +3,10 @@ import mongoose from "mongoose";
 import { AuthRequest } from "../middleware/auth.middleware";
 import { HttpError } from "../errors/http-error";
 import { InventoryService } from "../services/inventory.service";
+import { SettingsService } from "../services/settings.service";
 
 const service = new InventoryService();
+const settingsService = new SettingsService();
 
 export class AdminInventoryController {
   // POST /api/admin/inventory/stock-in { productId, qty, reason? }
@@ -51,9 +53,19 @@ export class AdminInventoryController {
   }
 
   // GET /api/admin/inventory/low-stock?threshold=5
-  async lowStock(req: AuthRequest, res: Response) {
-    const threshold = Number(req.query.threshold ?? 5);
-    const data = await service.lowStock(threshold);
-    return res.status(200).json({ success: true, data });
-  }
+
+
+// GET /api/admin/inventory/low-stock?threshold= (optional override)
+async lowStock(req: AuthRequest, res: Response) {
+  const settings = await settingsService.getOrCreate();
+
+  const fromSettings = Number(settings?.lowStockThreshold ?? 5);
+  const override = req.query.threshold !== undefined ? Number(req.query.threshold) : null;
+
+  const threshold =
+    override !== null && Number.isFinite(override) ? override : fromSettings;
+
+  const data = await service.lowStock(threshold);
+  return res.status(200).json({ success: true, data, meta: { threshold } });
+}
 }

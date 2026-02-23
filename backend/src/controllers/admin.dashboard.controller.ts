@@ -1,13 +1,28 @@
+// controllers/admin.dashboard.controller.ts
 import { Response } from "express";
 import { AuthRequest } from "../middleware/auth.middleware";
+import { HttpError } from "../errors/http-error";
 import { AdminDashboardService } from "../services/admin.dashboard.service";
 
-const service = new AdminDashboardService();
+function isYmd(v: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(v);
+}
 
 export class AdminDashboardController {
+  private service = new AdminDashboardService();
+
   async summary(req: AuthRequest, res: Response) {
-    const months = Math.min(24, Math.max(3, Number(req.query.months ?? 6)));
-    const data = await service.getSummary({ months });
+    const months = Math.max(1, Math.min(36, Number(req.query.months || 6)));
+
+    const from = String(req.query.from || "").trim(); // "YYYY-MM-DD"
+    const to = String(req.query.to || "").trim();     // "YYYY-MM-DD"
+
+    // ✅ validate format early (service will parse UTC)
+    if (from && !isYmd(from)) throw new HttpError(400, "Invalid from date (use YYYY-MM-DD)");
+    if (to && !isYmd(to)) throw new HttpError(400, "Invalid to date (use YYYY-MM-DD)");
+
+    const data = await this.service.getSummary({ months, from: from || undefined, to: to || undefined });
+
     return res.status(200).json({ success: true, data });
   }
 }

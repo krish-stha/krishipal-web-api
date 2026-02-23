@@ -2,29 +2,66 @@
 
 import { useEffect, useState } from "react";
 import { adminLowStock } from "@/lib/api/admin/inventory";
+import { adminGetSettings } from "@/lib/api/admin/settings";
 
 export default function LowStockPage() {
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<any[]>([]);
-  const [threshold, setThreshold] = useState(5);
+  const [threshold, setThreshold] = useState<number>(5);
   const [error, setError] = useState("");
 
-  const load = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const res = await adminLowStock(threshold);
-      setRows(res?.data?.data ?? res?.data ?? []);
-    } catch (e: any) {
-      setError(e?.message || "Failed to load low stock");
-      setRows([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // ✅ 1) Load default threshold from settings ONCE
   useEffect(() => {
-    load();
+    let alive = true;
+
+    (async () => {
+      try {
+        const res = await adminGetSettings();
+
+        // usually backend returns: { success: true, data: settings }
+        const settings = res?.data?.data ?? res?.data ?? {};
+        const t = Number(settings?.lowStockThreshold ?? 5);
+
+        if (!alive) return;
+        setThreshold(Number.isFinite(t) ? Math.max(1, t) : 5);
+      } catch (e) {
+        // ignore settings load errors; fallback stays 5
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // ✅ 2) Load low stock whenever threshold changes
+  useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const res = await adminLowStock(threshold);
+
+        // backend might return { success, data: rows } OR axios response
+        const data = res?.data?.data ?? res?.data ?? [];
+        if (!alive) return;
+
+        setRows(Array.isArray(data) ? data : []);
+      } catch (e: any) {
+        if (!alive) return;
+        setError(e?.response?.data?.message || e?.message || "Failed to load low stock");
+        setRows([]);
+      } finally {
+        if (!alive) return;
+        setLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
   }, [threshold]);
 
   return (
@@ -38,7 +75,7 @@ export default function LowStockPage() {
         <input
           type="number"
           value={threshold}
-          onChange={(e) => setThreshold(Math.max(1, Number(e.target.value || 5)))}
+          onChange={(e) => setThreshold(Math.max(1, Number(e.target.value || 1)))}
           className="h-10 w-24 rounded-xl border px-3 text-sm"
         />
       </div>
@@ -58,11 +95,18 @@ export default function LowStockPage() {
               <th className="p-3">Stock</th>
             </tr>
           </thead>
+
           <tbody>
             {!loading && rows.length === 0 ? (
               <tr>
                 <td className="p-4 text-slate-500" colSpan={3}>
                   No low stock items.
+                </td>
+              </tr>
+            ) : loading ? (
+              <tr>
+                <td className="p-4 text-slate-500" colSpan={3}>
+                  Loading...
                 </td>
               </tr>
             ) : (

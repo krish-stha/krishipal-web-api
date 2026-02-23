@@ -49,6 +49,9 @@ export const endpoints = {
 
     blogs: "/admin/blogs",
     blogById: (id: string) => `/admin/blogs/${id}`,
+
+    settings: "/admin/settings",
+    dashboardSummary: "/admin/dashboard",
     
 
   },
@@ -89,6 +92,10 @@ export const endpoints = {
   // ✅ esewa
   esewaInitiate: "/payments/esewa/initiate",
   esewaVerify: "/payments/esewa/verify",
+},
+
+settings: {
+  public: "/settings/public",
 },
 
 };

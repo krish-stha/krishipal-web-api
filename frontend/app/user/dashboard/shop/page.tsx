@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Header } from "../../component/header";
 import { Footer } from "../../component/footer";
 import { Button } from "@/app/auth/components/ui/button";
@@ -9,15 +9,14 @@ import { Card } from "@/app/auth/components/ui/card";
 import { listPublicProducts } from "@/lib/api/public/products";
 import { useCart } from "@/lib/contexts/cart-context";
 import { listPublicCategories } from "@/lib/api/public/category";
-import { useAuth } from "@/lib/contexts/auth-contexts"; // ✅ NEW
+import { useAuth } from "@/lib/contexts/auth-contexts";
+import { getPublicSettings } from "@/lib/api/settings";
 
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
 
 function productImageUrl(filename?: string | null) {
   if (!filename) return "/images/placeholder.png";
-  if (filename.startsWith("http://") || filename.startsWith("https://"))
-    return filename;
+  if (filename.startsWith("http://") || filename.startsWith("https://")) return filename;
   return `${BACKEND_URL}/public/product_images/${filename}`;
 }
 
@@ -34,7 +33,10 @@ type Category = {
 
 export default function ShopPage() {
   const { add } = useCart();
-  const { user } = useAuth(); // ✅ NEW
+  const { user } = useAuth();
+
+  // ✅ dynamic low stock threshold (from public settings)
+  const [lowStockThreshold, setLowStockThreshold] = useState<number>(5);
 
   // UI state
   const [loading, setLoading] = useState(false);
@@ -48,31 +50,61 @@ export default function ShopPage() {
   // filters
   const [search, setSearch] = useState("");
   const [selectedCategorySlug, setSelectedCategorySlug] = useState<string>("");
-  const [sort, setSort] = useState<"newest" | "price_asc" | "price_desc">(
-    "newest"
-  );
+  const [sort, setSort] = useState<"newest" | "price_asc" | "price_desc">("newest");
   const [onlyInStock, setOnlyInStock] = useState(false);
 
   // paging
   const [page, setPage] = useState(1);
   const limit = 12;
 
-  // load categories (same)
+  // ✅ load low stock threshold once
   useEffect(() => {
+  let alive = true;
+
+  (async () => {
+    try {
+      const s = await getPublicSettings();
+
+      console.log("PUBLIC SETTINGS RAW:", s); // ✅ add this
+      console.log("PUBLIC SETTINGS lowStockThreshold:", s?.lowStockThreshold); // ✅ add this
+
+      const t = Number(s?.data?.lowStockThreshold ?? 5);
+      if (!alive) return;
+      setLowStockThreshold(Number.isFinite(t) ? Math.max(1, t) : 5);
+    } catch (e) {
+      console.log("PUBLIC SETTINGS ERROR:", e); // optional
+    }
+  })();
+
+  return () => {
+    alive = false;
+  };
+}, []);
+
+  // load categories
+  useEffect(() => {
+    let alive = true;
+
     (async () => {
       setCatsLoading(true);
       try {
         const res = await listPublicCategories();
+        if (!alive) return;
         setCategories(res.data || []);
       } catch {
+        if (!alive) return;
         setCategories([]);
       } finally {
+        if (!alive) return;
         setCatsLoading(false);
       }
     })();
+
+    return () => {
+      alive = false;
+    };
   }, []);
 
-  // fetch products (same)
   const fetchProducts = async (nextPage: number, mode: "replace" | "append") => {
     setLoading(true);
     setError("");
@@ -99,31 +131,28 @@ export default function ShopPage() {
     }
   };
 
-  // initial + whenever filters change (same)
+  // initial + whenever filters change
   useEffect(() => {
     setPage(1);
     fetchProducts(1, "replace");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sort, selectedCategorySlug, onlyInStock]);
 
-  // search submit (same)
   const onSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     setPage(1);
     await fetchProducts(1, "replace");
   };
-  
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
       <Header />
 
       <main className="flex-1">
-        {/* Header strip (professional marketplace style) */}
+        {/* Header strip */}
         <section className="bg-white border-b">
           <div className="container mx-auto px-4 py-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              {/* ✅ Updated: keep existing text, add quick actions (no logic changes) */}
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h1 className="text-3xl font-bold text-slate-900">Shop</h1>
@@ -135,10 +164,7 @@ export default function ShopPage() {
                 <div className="flex items-center gap-2">
                   {user && (
                     <Link href="/user/dashboard/orders">
-                      <Button
-                        variant="outline"
-                        className="border-slate-300 h-10 rounded-xl"
-                      >
+                      <Button variant="outline" className="border-slate-300 h-10 rounded-xl">
                         My Orders
                       </Button>
                     </Link>
@@ -165,7 +191,6 @@ export default function ShopPage() {
                   </Button>
                 </div>
 
-                {/* toolbar line */}
                 <div className="mt-3 flex flex-wrap items-center gap-3">
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-slate-500">Sort</span>
@@ -210,6 +235,9 @@ export default function ShopPage() {
                     {loading ? "Loading…" : `${products.length} items`}
                   </div>
                 </div>
+
+                {/* optional debug */}
+                {/* <div className="mt-2 text-xs text-slate-400">Low stock threshold: {lowStockThreshold}</div> */}
               </form>
             </div>
           </div>
@@ -224,9 +252,7 @@ export default function ShopPage() {
                 <Card className="rounded-2xl p-5">
                   <div className="flex items-center justify-between">
                     <div className="font-semibold text-slate-900">Categories</div>
-                    {catsLoading && (
-                      <div className="text-xs text-slate-500">Loading…</div>
-                    )}
+                    {catsLoading && <div className="text-xs text-slate-500">Loading…</div>}
                   </div>
 
                   <div className="mt-4 space-y-1">
@@ -240,13 +266,10 @@ export default function ShopPage() {
                     >
                       All Categories
                     </button>
-                    
 
                     <div className="max-h-[420px] overflow-auto pr-1 pt-1">
                       {!catsLoading && categories.length === 0 ? (
-                        <div className="text-sm text-slate-500 px-3 py-3">
-                          No categories available
-                        </div>
+                        <div className="text-sm text-slate-500 px-3 py-3">No categories available</div>
                       ) : (
                         categories.map((c) => (
                           <button
@@ -266,11 +289,8 @@ export default function ShopPage() {
                   </div>
                 </Card>
 
-                {/* Small help card */}
                 <div className="mt-4 rounded-2xl border bg-white p-5">
-                  <div className="text-sm font-semibold text-slate-900">
-                    Tips
-                  </div>
+                  <div className="text-sm font-semibold text-slate-900">Tips</div>
                   <ul className="mt-2 text-sm text-slate-600 space-y-1 list-disc pl-5">
                     <li>Use search for SKU / name</li>
                     <li>Sort by price to compare quickly</li>
@@ -282,13 +302,11 @@ export default function ShopPage() {
 
             {/* Main */}
             <div className="lg:col-span-9">
-              {/* Heading line */}
               <div className="flex items-center justify-between mb-4">
                 <div className="text-sm text-slate-600">
                   {selectedCategorySlug ? (
                     <span>
-                      Category:{" "}
-                      <b className="text-slate-900">{selectedCategorySlug}</b>
+                      Category: <b className="text-slate-900">{selectedCategorySlug}</b>
                     </span>
                   ) : (
                     <span>Showing all products</span>
@@ -302,10 +320,10 @@ export default function ShopPage() {
                 </div>
               )}
 
-              {/* Grid */}
               <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
                 {products.map((p) => {
                   const firstImage = Array.isArray(p.images) ? p.images[0] : null;
+
                   const hasDiscount =
                     p.discountPrice !== null &&
                     p.discountPrice !== undefined &&
@@ -313,17 +331,16 @@ export default function ShopPage() {
 
                   const displayPrice = hasDiscount ? p.discountPrice : p.price;
                   const inStock = Number(p.stock ?? 0) > 0;
-                  const low = inStock && Number(p.stock ?? 0) <= 5;
+
+                  // ✅ dynamic threshold
+                  const low = inStock && Number(p.stock ?? 0) <= lowStockThreshold;
 
                   return (
                     <div
                       key={p._id}
                       className="group rounded-2xl border bg-white overflow-hidden shadow-sm hover:shadow-md transition"
                     >
-                      <Link
-                        href={`/user/dashboard/shop/${p.slug}`}
-                        className="block"
-                      >
+                      <Link href={`/user/dashboard/shop/${p.slug}`} className="block">
                         <div className="relative h-44 bg-slate-50 flex items-center justify-center overflow-hidden">
                           <img
                             src={productImageUrl(firstImage)}
@@ -331,7 +348,6 @@ export default function ShopPage() {
                             className="h-full w-full object-contain group-hover:scale-[1.03] transition-transform"
                           />
 
-                          {/* badges */}
                           <div className="absolute top-3 left-3 flex gap-2">
                             {hasDiscount && (
                               <span className="text-xs px-2 py-1 rounded-full bg-red-50 text-red-700 font-semibold">
@@ -340,13 +356,10 @@ export default function ShopPage() {
                             )}
 
                             {low && (
-  <span className="text-xs px-2 py-1 rounded-full bg-amber-50 text-amber-700 font-semibold">
-    Low stock
-  </span>
-)}
-
-
-
+                              <span className="text-xs px-2 py-1 rounded-full bg-amber-50 text-amber-700 font-semibold">
+                                Low stock
+                              </span>
+                            )}
 
                             {!inStock && (
                               <span className="text-xs px-2 py-1 rounded-full bg-slate-200 text-slate-700 font-semibold">
@@ -411,7 +424,6 @@ export default function ShopPage() {
                 )}
               </div>
 
-              {/* Load more */}
               <div className="mt-8 flex justify-center">
                 <Button
                   variant="outline"

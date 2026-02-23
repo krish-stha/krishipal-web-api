@@ -20,6 +20,8 @@ import adminCartRoutes from "./routes/admin.cart.route";
 import adminBlogRoutes from "./routes/admin.blog.routes";
 import blogRoutes from "./routes/blog.routes";
 import adminDashboardRoutes from "./routes/admin.dashboard.route";
+import adminSettingsRoutes from "./routes/admin.settings.route";
+import settingsRoutes from "./routes/settings.route";
 
 const app = express();
 
@@ -65,6 +67,8 @@ app.use("/api/admin", adminPaymentRoutes);
 app.use("/api/admin", adminInventoryRoutes);
 app.use("/api/admin", adminBlogRoutes);
 app.use("/api/admin", adminDashboardRoutes);
+app.use("/api/admin", adminSettingsRoutes);
+app.use("/api/settings", settingsRoutes);
 
 
 

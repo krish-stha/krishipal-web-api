@@ -1,7 +1,9 @@
 import { api } from "./axios";
 import { endpoints } from "./endpoints";
 
-export async function createOrder(payload: { address: string; paymentMethod?: "COD" }) {
+type PaymentMethod = "COD" | "KHALTI" | "ESEWA";
+
+export async function createOrder(payload: { address: string; paymentMethod?: PaymentMethod  }) {
   const res = await api.post(endpoints.orders.create, {
     address: payload.address,
     paymentMethod: payload.paymentMethod ?? "COD",

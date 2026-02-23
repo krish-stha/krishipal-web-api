@@ -10,6 +10,9 @@ export function adminStockOut(payload: { productId: string; qty: number; reason?
 export function adminInventoryLogs(params?: { page?: number; limit?: number; productId?: string; type?: string }) {
   return api.get(endpoints.admin.inventoryLogs, { params });
 }
-export function adminLowStock(threshold = 5) {
-  return api.get(endpoints.admin.inventoryLowStock, { params: { threshold } });
+export function adminLowStock(threshold?: number) {
+  return api.get(endpoints.admin.inventoryLowStock, {
+    params: threshold ? { threshold } : {},
+  });
 }
+

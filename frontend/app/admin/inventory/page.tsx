@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   adminLowStock,
   adminInventoryLogs,
   adminStockIn,
   adminStockOut,
 } from "@/lib/api/admin/inventory";
+import { adminGetSettings } from "@/lib/api/admin/settings";
 import { api } from "@/lib/api/axios";
 import { endpoints } from "@/lib/api/endpoints";
 
@@ -30,16 +32,36 @@ export default function AdminInventoryPage() {
   const [qtyText, setQtyText] = useState<string>("1");
   const [reason, setReason] = useState("");
 
+  // ✅ threshold from settings
+  const [threshold, setThreshold] = useState<number>(5);
+
   const selectedProduct = useMemo(() => {
     return products.find((p) => String(p._id) === String(selectedProductId)) || null;
   }, [products, selectedProductId]);
 
-  async function loadAll() {
+  // ✅ load threshold once
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await adminGetSettings();
+        const settings = res?.data?.data ?? res?.data ?? {};
+        const t = Number(settings?.lowStockThreshold ?? 5);
+        if (!alive) return;
+        setThreshold(Number.isFinite(t) ? Math.max(1, t) : 5);
+      } catch {
+        // ignore -> keep 5
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  async function loadAll(currentThreshold = threshold) {
     setLoading(true);
     setError("");
     try {
-      // 1) load products for dropdown (admin products endpoint)
-      // If your admin/products returns {data:[...]} this will work.
       const prodRes = await api.get(endpoints.admin.products, {
         params: { page: 1, limit: 200 },
       });
@@ -61,14 +83,12 @@ export default function AdminInventoryPage() {
 
       setProducts(normalized);
 
-      // auto select first product if none selected
       if (!selectedProductId && normalized.length > 0) {
         setSelectedProductId(normalized[0]._id);
       }
 
-      // 2) load dashboard data
       const [lsRes, logRes] = await Promise.all([
-        adminLowStock(5),
+        adminLowStock(currentThreshold), // ✅ use settings threshold
         adminInventoryLogs({ page: 1, limit: 20 }),
       ]);
 
@@ -81,10 +101,11 @@ export default function AdminInventoryPage() {
     }
   }
 
+  // ✅ reload when threshold is loaded/changes
   useEffect(() => {
-    loadAll();
+    loadAll(threshold);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [threshold]);
 
   function parseQtyOrThrow(): number {
     const n = Number(qtyText);
@@ -109,7 +130,7 @@ export default function AdminInventoryPage() {
 
       setReason("");
       setQtyText("1");
-      await loadAll();
+      await loadAll(threshold);
     } catch (e: any) {
       setError(e?.response?.data?.message || e?.message || "Stock-in failed");
     } finally {
@@ -132,7 +153,7 @@ export default function AdminInventoryPage() {
 
       setReason("");
       setQtyText("1");
-      await loadAll();
+      await loadAll(threshold);
     } catch (e: any) {
       setError(e?.response?.data?.message || e?.message || "Stock-out failed");
     } finally {
@@ -154,16 +175,18 @@ export default function AdminInventoryPage() {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="rounded-2xl border bg-white p-5">
-          <div className="text-sm text-slate-500">Low stock (≤ 5)</div>
+        {/* ✅ clickable card -> opens low-stock page */}
+        <Link href="/admin/inventory/low-stock" className="rounded-2xl border bg-white p-5 hover:bg-slate-50">
+          <div className="text-sm text-slate-500">Low stock (≤ {threshold})</div>
           <div className="text-3xl font-bold mt-2">{loading ? "…" : lowStock.length}</div>
-        </div>
+          <div className="mt-2 text-xs text-slate-500">Click to view list</div>
+        </Link>
 
+        {/* ... keep your Quick Stock Update + Logs same ... */}
         <div className="md:col-span-2 rounded-2xl border bg-white p-5">
           <div className="font-semibold">Quick Stock Update</div>
 
           <div className="mt-3 grid grid-cols-1 md:grid-cols-4 gap-2">
-            {/* Product dropdown */}
             <select
               value={selectedProductId}
               onChange={(e) => setSelectedProductId(e.target.value)}
@@ -181,13 +204,11 @@ export default function AdminInventoryPage() {
               )}
             </select>
 
-            {/* Qty input that allows backspace */}
             <input
               type="text"
               inputMode="numeric"
               value={qtyText}
               onChange={(e) => {
-                // allow empty, or digits only
                 const v = e.target.value;
                 if (v === "" || /^[0-9]+$/.test(v)) setQtyText(v);
               }}
@@ -255,9 +276,7 @@ export default function AdminInventoryPage() {
               logs.map((l: any, idx: number) => (
                 <tr key={l._id || idx} className="border-t">
                   <td className="p-3">{l.createdAt ? new Date(l.createdAt).toLocaleString() : "-"}</td>
-                  <td className="p-3">
-                    {l.productName || l.product?.name || l.productId || l.product || "-"}
-                  </td>
+                  <td className="p-3">{l.productName || l.product?.name || l.productId || "-"}</td>
                   <td className="p-3">{l.type || l.action || "-"}</td>
                   <td className="p-3 font-semibold">{l.qty ?? l.delta ?? "-"}</td>
                   <td className="p-3">{l.reason || "-"}</td>
