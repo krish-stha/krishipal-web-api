@@ -18,6 +18,8 @@ router.get(
         storeName: s.storeName,
         storeAddress: s.storeAddress,
         storeEmail: s.storeEmail,
+        storePhone: s.storePhone,
+        storeLogo:s.storeLogo,
         shippingFeeDefault: s.shippingFeeDefault,
         freeShippingThreshold: s.freeShippingThreshold,
         lowStockThreshold: s.lowStockThreshold, // optional; can help UI too

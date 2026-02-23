@@ -11,6 +11,8 @@ import fs from "fs";
 import { generateInvoicePdfBuffer } from "../services/invoice.service";
 import { UserModel } from "../models/user.model"; // only if you want customer name/email on invoice
 import { SettingsService } from "../services/settings.service";
+import { getCompanyFromSettings } from "../services/company.service";
+
 
 
 
@@ -32,6 +34,8 @@ function computeSubtotalFromCart(cart: any) {
 export class OrderController {
   // POST /api/orders
   // body: { address?: string, paymentMethod?: "COD" }
+
+  
   async createFromCart(req: AuthRequest, res: Response) {
     const userId = mustUserId(req);
 
@@ -292,25 +296,30 @@ async downloadInvoice(req: AuthRequest, res: Response) {
   const ph = String((user as any)?.phone || "").trim();
   const customerPhone = ph ? `${cc}${ph}` : "-";
 
-  const COMPANY_NAME = process.env.COMPANY_NAME || "KrishiPal";
-  const COMPANY_ADDRESS = process.env.COMPANY_ADDRESS || "Kathmandu, Nepal";
 
-  const logoPath = path.resolve(process.cwd(), "public", "logo.png");
-  const safeLogoPath = fs.existsSync(logoPath) ? logoPath : undefined;
+
+  const company = await getCompanyFromSettings();
+  const safeLogoPath = fs.existsSync(company.logoPath) ? company.logoPath : undefined;
+
 
   console.log("USER PHONE:", user?.countryCode, user?.phone);
 
 
   const pdf = await generateInvoicePdfBuffer({
-    order,
-    company: { name: COMPANY_NAME, address: COMPANY_ADDRESS },
-    logoPath: safeLogoPath,
-    customer: {
-      name: (user as any)?.fullName || "-",
-      email: (user as any)?.email || "-",
-      phone: customerPhone,
-    },
-  });
+  order,
+  company: {
+    name: company.name,
+    address: company.address,
+    email: company.email,
+    phone: company.phone,
+  },
+  logoPath: safeLogoPath,
+  customer: {
+    name: (user as any)?.fullName || "-",
+    email: (user as any)?.email || "-",
+    phone: customerPhone,
+  },
+});
 
   // ✅ prevent cached old PDF
   res.setHeader("Cache-Control", "no-store");

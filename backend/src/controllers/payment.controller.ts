@@ -12,6 +12,8 @@ import { generateInvoicePdfBuffer } from "../services/invoice.service";
 import { sendPaymentReceiptEmail } from "../services/mail.service";
 import crypto from "crypto";
 import { InventoryOrderService } from "../services/inventory.order.service";
+import { getCompanyFromSettings } from "../services/company.service";
+import fs from "fs";
 
 function mustUserId(req: AuthRequest) {
   const userId = req.user?.id;
@@ -305,12 +307,10 @@ if (order.paymentStatus === "paid") {
     order.paymentRef = pidx;
 
     if (status === "completed") {
-    const invOrder = new InventoryOrderService();
 
       order.paymentStatus = "paid";
       order.paidAt = new Date();
       await order.save();
-      await invOrder.applyPaidOrderStockOut(String(order._id), String(order.user));
 
       await logPayment({
         orderId,
@@ -334,19 +334,26 @@ if (user?.email) {
   const cc = String((user as any)?.countryCode || "").trim();
   const ph = String((user as any)?.phone || "").trim();
   const customerPhone = ph ? `${cc}${ph}` : "-";
+  
 
-  const invoicePdf = await generateInvoicePdfBuffer({
-    order: order.toObject(),
-    company: { name: COMPANY_NAME, address: COMPANY_ADDRESS },
-    logoPath: COMPANY_LOGO_PATH,
+  const company = await getCompanyFromSettings();
+const safeLogoPath = company.logoPath && fs.existsSync(company.logoPath) ? company.logoPath : undefined;
 
-    // ✅ pass customer explicitly (strongest + no confusion)
-    customer: {
-      name: (user as any)?.fullName || "-",
-      email: (user as any)?.email || "-",
-      phone: customerPhone,
-    },
-  });
+const invoicePdf = await generateInvoicePdfBuffer({
+  order: order.toObject(),
+  company: {
+    name: company.name,
+    address: company.address,
+    email: company.email,
+    phone: company.phone,
+  },
+  logoPath: safeLogoPath,
+  customer: {
+    name: (user as any)?.fullName || "-",
+    email: (user as any)?.email || "-",
+    phone: customerPhone,
+  },
+});
 
   await sendPaymentReceiptEmail({
     to: (user as any).email,
@@ -665,12 +672,10 @@ try {
 
   // ✅ Mark paid only if COMPLETE
   if (stStatus === "COMPLETE") {
-  const invOrder = new InventoryOrderService();
 
     order.paymentStatus = "paid";
     order.paidAt = new Date();
     await order.save();
-    await invOrder.applyPaidOrderStockOut(String(order._id), String(order.user));
 
     await logPayment({
       orderId,
@@ -693,16 +698,15 @@ try {
         const ph = String((user as any)?.phone || "").trim();
         const customerPhone = ph ? `${cc}${ph}` : "-";
 
-        const invoicePdf = await generateInvoicePdfBuffer({
-          order: order.toObject(),
-          company: { name: COMPANY_NAME, address: COMPANY_ADDRESS },
-          logoPath: COMPANY_LOGO_PATH,
-          customer: {
-            name: (user as any)?.fullName || "-",
-            email: (user as any)?.email || "-",
-            phone: customerPhone,
-          },
-        });
+        const company = await getCompanyFromSettings();
+const safeLogoPath = company.logoPath && fs.existsSync(company.logoPath) ? company.logoPath : undefined;
+
+const invoicePdf = await generateInvoicePdfBuffer({
+  order: order.toObject(),
+  company: { name: company.name, address: company.address, email: company.email, phone: company.phone },
+  logoPath: safeLogoPath,
+  customer: { name: user.fullName, email: user.email, phone: customerPhone },
+});
 
         await sendPaymentReceiptEmail({
           to: (user as any).email,

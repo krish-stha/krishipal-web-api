@@ -20,7 +20,7 @@ function fmtDate(v: any) {
 
 export async function generateInvoicePdfBuffer(params: {
   order: any; // order lean/object is ok
-  company: { name: string; address: string };
+  company: { name: string; address: string; email?: string; phone?: string };
   logoPath?: string; // optional local file path
   user?: any; // optional - backward compatible
   customer?: { name?: string; email?: string; phone?: string };
@@ -142,10 +142,19 @@ export async function generateInvoicePdfBuffer(params: {
     .font("Helvetica")
     .fontSize(9)
     .fillColor(C.sub)
-    .text(company.address, companyX, headerY + 38, {
-      align: "left",
-      width: 260,
-    });
+    const companyLines: string[] = [company.address];
+
+if (company.phone && String(company.phone).trim()) {
+  companyLines.push(`Phone: ${String(company.phone).trim()}`);
+}
+if (company.email && String(company.email).trim()) {
+  companyLines.push(`Email: ${String(company.email).trim()}`);
+}
+
+doc.text(companyLines.join("\n"), companyX, headerY + 38, {
+  align: "left",
+  width: 260,
+});;
 
   // invoice label on right
   doc

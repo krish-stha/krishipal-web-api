@@ -15,6 +15,10 @@ export class SettingsService {
     if (payload.storeName !== undefined) data.storeName = String(payload.storeName || "").trim();
     if (payload.storeAddress !== undefined) data.storeAddress = String(payload.storeAddress || "").trim();
     if (payload.storeEmail !== undefined) data.storeEmail = String(payload.storeEmail || "").trim();
+    if (payload.storePhone !== undefined) {
+     data.storePhone = String(payload.storePhone || "").trim();
+    }
+    if (payload.storeLogo !== undefined) data.storeLogo = String(payload.storeLogo || "").trim();
 
     if (payload.shippingFeeDefault !== undefined) {
       const v = Number(payload.shippingFeeDefault);

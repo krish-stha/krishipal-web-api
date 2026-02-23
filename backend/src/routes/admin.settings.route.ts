@@ -2,6 +2,7 @@ import { Router } from "express";
 import { protect } from "../middleware/auth.middleware";
 import { adminOnly } from "../middleware/admin.middleware";
 import { AdminSettingsController } from "../controllers/admin.settings.controller";
+import { uploadLogo } from "../middleware/uploadLogo";
 
 const router = Router();
 const ctrl = new AdminSettingsController();
@@ -11,5 +12,12 @@ router.get("/settings", protect, adminOnly, (req, res) => ctrl.get(req as any, r
 
 // PUT /api/admin/settings
 router.put("/settings", protect, adminOnly, (req, res) => ctrl.update(req as any, res));
+router.post(
+  "/settings/logo",
+  protect,
+  adminOnly,
+  uploadLogo.single("logo"),
+  (req, res) => ctrl.uploadLogo(req as any, res)
+);
 
 export default router;

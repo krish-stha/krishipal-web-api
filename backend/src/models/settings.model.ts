@@ -13,6 +13,7 @@ export interface ISettings {
   freeShippingThreshold?: number | null;
 
   lowStockThreshold: number;
+  storeLogo: string;
 
   payments: {
     COD: boolean;
@@ -36,6 +37,7 @@ const SettingsSchema = new Schema<ISettings>(
     freeShippingThreshold: { type: Number, default: null, min: 0 },
 
     lowStockThreshold: { type: Number, default: 5, min: 1 },
+    storeLogo: { type: String, default: "" }, // filename or full URL
 
     payments: {
       COD: { type: Boolean, default: true },

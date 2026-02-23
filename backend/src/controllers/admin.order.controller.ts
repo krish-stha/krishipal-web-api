@@ -11,6 +11,8 @@ import { generateInvoicePdfBuffer } from "../services/invoice.service";
 import { sendOrderStatusEmail, sendPaymentReceiptEmail } from "../services/mail.service";
 import { InventoryOrderService } from "../services/inventory.order.service";
 import { SettingsService } from "../services/settings.service";
+import { getCompanyFromSettings } from "../services/company.service";
+import { UserModel } from "../models/user.model";
 
 const ALLOWED_STATUS = ["pending", "confirmed", "shipped", "delivered", "cancelled"] as const;
 
@@ -114,18 +116,36 @@ export class AdminOrderController {
       throw new HttpError(400, "Invoice available only after payment");
     }
 
-    const settings = await new SettingsService().getOrCreate();
-    const COMPANY_NAME = settings.storeName;
-    const COMPANY_ADDRESS = settings.storeAddress;
+    const u = await UserModel.findById(order.user)
+  .select("fullName email countryCode phone")
+  .lean();
 
-    const logoPath = path.resolve(process.cwd(), "public", "logo.png");
-    const safeLogoPath = fs.existsSync(logoPath) ? logoPath : undefined;
+const phone = u?.phone
+  ? `${String(u?.countryCode || "").trim()}${String(u?.phone || "").trim()}`.trim()
+  : "-";
+  
+    const company = await getCompanyFromSettings();
+const safeLogoPath = fs.existsSync(company.logoPath) ? company.logoPath : undefined;
 
-    const pdf = await generateInvoicePdfBuffer({
-      order,
-      company: { name: COMPANY_NAME, address: COMPANY_ADDRESS },
-      logoPath: safeLogoPath,
-    });
+const pdf = await generateInvoicePdfBuffer({
+  order,
+  company: {
+    name: company.name,
+    address: company.address,
+    email: company.email,
+    phone: company.phone,
+  },
+  logoPath: safeLogoPath,
+  customer: {
+    name: u?.fullName || "-",
+    email: u?.email || "-",
+    phone,
+  },
+});
+
+   
+
+    
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `inline; filename="invoice-${id}.pdf"`);
@@ -205,16 +225,23 @@ export class AdminOrderController {
         const phone = user?.phone
           ? `${String(user?.countryCode || "").trim()}${String(user?.phone || "").trim()}`.trim()
           : "-";
-
+        
+        const company = await getCompanyFromSettings();
         const invoicePdf = await generateInvoicePdfBuffer({
           order: order.toObject(),
-          company: { name: COMPANY_NAME, address: COMPANY_ADDRESS },
-          logoPath: safeLogoPath,
+          company: {
+    name: company.name,
+    address: company.address,
+    email: company.email,   // ✅ add if your PDF supports it
+    phone: company.phone,   // ✅ add if your PDF supports it
+  },
+  logoPath: company.logoPath,
           customer: {
             name: user?.fullName || "-",
             email: user?.email || "-",
             phone,
           },
+          
         });
 
         await sendPaymentReceiptEmail({

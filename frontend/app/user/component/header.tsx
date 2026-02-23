@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { ShoppingCart, LogOut, Package } from "lucide-react"; // ✅ added Package icon (optional)
+import { ShoppingCart, LogOut, Package } from "lucide-react";
 import { Button } from "@/app/auth/components/ui/button";
 import { useAuth } from "@/lib/contexts/auth-contexts";
 import Cookies from "js-cookie";
@@ -17,6 +17,9 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import UserProfilePanel from "../profile/UserProfilePanel";
+
+// ✅ use ONLY hook (remove getPublicSettings + manual useEffect)
+import { usePublicSettings } from "@/lib/api/hooks/usePublicSettings";
 
 type CookieUser = {
   name?: string;
@@ -39,7 +42,7 @@ type CookieUser = {
 const COOKIE_KEY = "krishipal_user";
 export const USER_UPDATED_EVENT = "krishipal_user_updated";
 
-// ✅ NEW: close sheet event (UserProfilePanel dispatches this after save)
+// ✅ close sheet event (UserProfilePanel dispatches this after save)
 const PROFILE_CLOSE_EVENT = "krishipal_profile_close";
 
 // ✅ IMPORTANT: use BACKEND_URL (NO /api) for images
@@ -107,11 +110,29 @@ function initials(name?: string, email?: string) {
   if (e) return e[0].toUpperCase();
   return "U";
 }
+
+function isRemoteUrl(src: string) {
+  return src.startsWith("http://") || src.startsWith("https://");
+}
+
+function resolveStoreLogo(storeLogo?: string | null) {
+  const v = String(storeLogo || "").trim();
+  if (!v) return "/images/krishipal_logo.png";
+
+  // already full url
+  if (v.startsWith("http://") || v.startsWith("https://")) return v;
+
+  // already absolute path
+  if (v.startsWith("/")) return v;
+
+  // filename in DB -> backend public path
+  return `${BACKEND_URL}/public/store_logo/${v}`;
+}
 // -----------------------------------------
 
 export function Header() {
   const { user, isLoading, logout } = useAuth();
-  const { count } = useCart(); // ✅ FIX: now count exists
+  const { count } = useCart();
 
   // ✅ control sheet open/close
   const [profileOpen, setProfileOpen] = useState(false);
@@ -119,6 +140,14 @@ export function Header() {
   const [cookieName, setCookieName] = useState("");
   const [cookieEmail, setCookieEmail] = useState("");
   const [cookiePhoto, setCookiePhoto] = useState<string | null>(null);
+
+  // ✅ public settings (store name/logo)
+  const settings: any = usePublicSettings();
+  const storeName = String(settings?.storeName || "KrishiPal").trim() || "KrishiPal";
+
+  // if you store logo in settings (ex: "/images/krishipal_logo.png" OR full URL)
+  // IMPORTANT: if it's remote, Next/Image might require next.config. Using unoptimized fixes quickly.
+  const storeLogo = resolveStoreLogo(settings?.storeLogo);
 
   const syncFromCookie = () => {
     const cu = getCookieUser();
@@ -156,14 +185,17 @@ export function Header() {
         {/* Logo */}
         <Link href="/" className="flex items-center gap-3">
           <Image
-            src="/images/krishipal_logo.png"
-            alt="KrishiPal Logo"
+            src={storeLogo}
+            alt={`${storeName} Logo`}
             width={50}
             height={50}
             className="object-contain"
+            unoptimized={isRemoteUrl(storeLogo)} // ✅ quick fix for remote logo
           />
+
+          {/* ✅ company name from settings */}
           <div className="text-2xl font-bold text-green-700">
-            Krishi<span className="text-green-600">Pal</span>
+            {storeName}
           </div>
         </Link>
 
@@ -197,7 +229,6 @@ export function Header() {
             Shop
           </Link>
 
-          {/* ✅ ADD MY ORDERS HERE (Professional placement: after Shop) */}
           {user && (
             <Link
               href="/user/dashboard/orders"
@@ -264,7 +295,6 @@ export function Header() {
                 </SheetHeader>
 
                 <div className="mt-6 space-y-6">
-                  {/* ✅ OPTIONAL: Add My Orders in the profile panel too (mobile friendly) */}
                   <Link
                     href="/user/dashboard/orders"
                     onClick={() => setProfileOpen(false)}
@@ -301,7 +331,7 @@ export function Header() {
             </Link>
           )}
         </div>
-      </div> 
+      </div>
     </header>
   );
 }
