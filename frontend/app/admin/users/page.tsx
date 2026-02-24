@@ -18,6 +18,7 @@ import {
   Download,
   Trash2,
 } from "lucide-react";
+import { ConfirmDialog } from "@/app/auth/components/ui/confirm-dialog";
 
 type RoleFilter = "all" | "admin" | "user";
 type SortKey =
@@ -97,6 +98,11 @@ export default function AdminUsersPage() {
     limit: 10,
     totalPages: 1,
   });
+
+  const [confirmOpen, setConfirmOpen] = useState(false);
+const [deleteId, setDeleteId] = useState<string | null>(null);
+const [deleteLoading, setDeleteLoading] = useState(false);
+const [toast, setToast] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
