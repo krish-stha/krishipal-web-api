@@ -51,7 +51,7 @@ export const endpoints = {
     blogById: (id: string) => `/admin/blogs/${id}`,
 
     settings: "/admin/settings",
-    dashboardSummary: "/admin/dashboard",
+    dashboardSummary: "/admin/dashboard/summary",
     
 
   },

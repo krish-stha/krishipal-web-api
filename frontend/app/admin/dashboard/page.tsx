@@ -10,51 +10,72 @@ import { RecentUsers } from "../components/RecentUsers";
 import { RecentOrders } from "../components/RecentOrders";
 
 function ymd(d: Date) {
-  // YYYY-MM-DD
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
 
+type GroupBy = "day" | "month";
+
 export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [data, setData] = useState<any>(null);
 
-  // ✅ NEW date range states
   const [from, setFrom] = useState<string>("");
   const [to, setTo] = useState<string>("");
 
-  const load = async (params?: { months?: number; from?: string; to?: string }) => {
+  // ✅ UPDATED: load params include groupBy
+  const load = async (params?: {
+    months?: number;
+    from?: string;
+    to?: string;
+    groupBy?: GroupBy;
+  }) => {
     try {
       setLoading(true);
       const res = await adminDashboardSummary(params);
+      // your API returns { success, data }
       setData(res?.data);
       setErr(null);
     } catch (e: any) {
       setErr(e?.response?.data?.message || e?.message || "Failed to load dashboard");
+      setData(null);
     } finally {
       setLoading(false);
     }
   };
 
-  // initial load (default months = 6)
+  // default = last 30 days
   useEffect(() => {
-    load({ months: 6 });
+    const now = new Date();
+    const d = new Date();
+    d.setDate(now.getDate() - 29);
+
+    const f = ymd(d);
+    const t = ymd(now);
+
+    setFrom(f);
+    setTo(t);
+
+    // ✅ IMPORTANT: send groupBy=day because from/to exists
+    load({ months: 6, from: f, to: t, groupBy: "day" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const apply = () => {
-    // basic validation
     if (from && to && from > to) {
       setErr("From date cannot be after To date");
       return;
     }
     setErr(null);
+
     load({
-      months: 6, // keep chart “slots”
+      months: 6,
       from: from || undefined,
       to: to || undefined,
+      groupBy: from && to ? "day" : "month",
     });
   };
 
@@ -62,7 +83,8 @@ export default function AdminDashboardPage() {
     setFrom("");
     setTo("");
     setErr(null);
-    load({ months: 6 });
+
+    load({ months: 6, groupBy: "month" });
   };
 
   const quickToday = () => {
@@ -70,36 +92,42 @@ export default function AdminDashboardPage() {
     setFrom(t);
     setTo(t);
     setErr(null);
-    load({ months: 6, from: t, to: t });
+
+    load({ months: 6, from: t, to: t, groupBy: "day" });
   };
 
   const quick7d = () => {
     const now = new Date();
     const d = new Date();
-    d.setDate(now.getDate() - 6); // last 7 days incl today
+    d.setDate(now.getDate() - 6);
+
     const f = ymd(d);
     const t = ymd(now);
+
     setFrom(f);
     setTo(t);
     setErr(null);
-    load({ months: 6, from: f, to: t });
+
+    load({ months: 6, from: f, to: t, groupBy: "day" });
   };
 
   const quick30d = () => {
     const now = new Date();
     const d = new Date();
     d.setDate(now.getDate() - 29);
+
     const f = ymd(d);
     const t = ymd(now);
+
     setFrom(f);
     setTo(t);
     setErr(null);
-    load({ months: 6, from: f, to: t });
+
+    load({ months: 6, from: f, to: t, groupBy: "day" });
   };
 
   return (
     <div className="space-y-6">
-      {/* Header + Filters */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <div className="text-2xl font-semibold text-slate-900">Dashboard</div>
@@ -107,7 +135,6 @@ export default function AdminDashboardPage() {
         </div>
 
         <div className="flex flex-wrap items-end gap-2">
-          {/* Quick presets */}
           <Button variant="outline" className="border-slate-300" onClick={quickToday} disabled={loading}>
             Today
           </Button>
@@ -120,7 +147,6 @@ export default function AdminDashboardPage() {
 
           <div className="w-px h-9 bg-slate-200 mx-1" />
 
-          {/* Range pickers */}
           <div className="flex flex-col">
             <div className="text-xs text-slate-600 mb-1">From</div>
             <input
@@ -144,21 +170,18 @@ export default function AdminDashboardPage() {
           <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={apply} disabled={loading}>
             Apply
           </Button>
-
           <Button variant="outline" className="border-slate-300" onClick={clear} disabled={loading}>
             Clear
           </Button>
         </div>
       </div>
 
-      {/* Error */}
       {err && (
         <Card className="border-red-200 bg-red-50">
           <CardContent className="py-4 text-sm text-red-700">{err}</CardContent>
         </Card>
       )}
 
-      {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard title="Total Users" value={loading ? "..." : data?.totals?.users ?? 0} />
         <StatCard title="Products" value={loading ? "..." : data?.totals?.products ?? 0} />
@@ -166,13 +189,17 @@ export default function AdminDashboardPage() {
         <StatCard title="Total Orders" value={loading ? "..." : data?.totals?.orders ?? 0} />
         <StatCard title="Paid Orders" value={loading ? "..." : data?.totals?.paidOrders ?? 0} />
         <StatCard title="Total Revenue" value={loading ? "..." : `Rs. ${data?.totals?.revenue ?? 0}`} />
-        
       </div>
 
-      {/* Chart */}
-      <RevenueChart loading={loading} rows={data?.monthlyRevenue ?? []} />
+      {/* ✅ Chart */}
+      <RevenueChart
+        loading={loading}
+        rows={data?.revenueTrend ?? []}
+        from={from}
+        to={to}
+        chartType={data?.filters?.chartType ?? (from && to ? "day" : "month")}
+      />
 
-      {/* Recent tables */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <RecentOrders loading={loading} rows={data?.recentOrders ?? []} />
         <RecentUsers loading={loading} rows={data?.recentUsers ?? []} />

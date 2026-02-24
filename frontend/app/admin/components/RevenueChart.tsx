@@ -11,14 +11,30 @@ import {
   CartesianGrid,
 } from "recharts";
 
-export function RevenueChart({ loading, rows }: { loading: boolean; rows: any[] }) {
+export function RevenueChart({
+  loading,
+  rows,
+  mode,
+  from,
+  to,
+}: {
+  loading: boolean;
+  rows: any[];
+  mode: "daily" | "monthly";
+  from?: string;
+  to?: string;
+}) {
+  const title = mode === "daily" ? "Daily Revenue" : "Monthly Revenue";
+
   return (
     <Card className="rounded-2xl">
       <CardContent className="py-5">
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-sm font-semibold text-slate-900">Monthly Revenue</div>
-            <div className="text-xs text-slate-500 mt-1">Paid orders only</div>
+            <div className="text-sm font-semibold text-slate-900">{title}</div>
+            <div className="text-xs text-slate-500 mt-1">
+              Paid orders only {from && to ? `• ${from} → ${to}` : ""}
+            </div>
           </div>
         </div>
 
@@ -29,7 +45,11 @@ export function RevenueChart({ loading, rows }: { loading: boolean; rows: any[] 
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={rows}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
+                <XAxis
+                  dataKey="label"
+                  interval="preserveStartEnd"
+                  tickFormatter={(v) => (mode === "daily" ? String(v).slice(5) : v)} // daily -> "MM-DD"
+                />
                 <YAxis />
                 <Tooltip />
                 <Line type="monotone" dataKey="revenue" />
