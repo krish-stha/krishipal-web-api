@@ -90,7 +90,7 @@
     return transporter.sendMail({
       from,
       to: params.to,
-      subject: `Payment Receipt - Order ${String(params.orderId).slice(-6)} - KrishiPal`,
+      subject: `Payment Receipt - Order ${String(params.orderId).slice(-6)} `,
       html,
       attachments: [
         {
@@ -118,7 +118,7 @@
 
     await sendEmail({
       to: params.to,
-      subject: `Your order ${params.orderId} is now ${statusPretty} - KrishiPal`,
+      subject: `Your order ${params.orderId} is now ${statusPretty} `,
       html: `
         <div style="font-family: Arial; padding: 20px; color: #0f172a;">
           <h2 style="margin: 0 0 8px;">Order Status Updated</h2>
@@ -134,7 +134,7 @@
           </div>
 
           <p style="margin-top: 14px; color:#475569;">
-            Thank you for shopping with KrishiPal.
+            Thank you for shopping.
           </p>
         </div>
       `,

@@ -10,6 +10,8 @@ import { Card } from "@/app/auth/components/ui/card";
 import { useCart } from "@/lib/contexts/cart-context";
 import { getPublicSettings } from "@/lib/api/settings";
 import { getPublicProductBySlug } from "@/lib/api/public/products";
+import { useAuth } from "@/lib/contexts/auth-contexts";
+import { usePathname } from "next/navigation";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
 
@@ -28,7 +30,18 @@ export default function ShopProductDetailPage() {
   const params = useParams<{ slug: string }>();
   const slug = String(params?.slug || "");
 
-  const { add, selectOnly } = useCart();
+
+  const { user } = useAuth();
+const pathname = usePathname();
+
+const requireLogin = () => {
+  if (user) return true;
+  const ok = window.confirm("Need to login first to continue. Go to login?");
+  if (ok) router.push(`/auth/login?next=${encodeURIComponent(pathname)}`);
+  return false;
+};
+
+  const { add, selectOnly, refresh } = useCart();
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -98,23 +111,28 @@ export default function ShopProductDetailPage() {
   const low = inStock && stock <= (Number.isFinite(lowStockThreshold) ? Math.max(1, lowStockThreshold) : 5);
 
   const onAddToCart = async () => {
-    setError("");
-    if (!product?._id) return setError("Product not found");
-    if (!inStock) return setError("Out of stock");
+  setError("");
+  if (!requireLogin()) return;   // ✅ NEW
+  if (!product?._id) return setError("Product not found");
+  if (!inStock) return setError("Out of stock");
 
-    const q = Math.max(1, Math.min(stock, Number(qty || 1)));
-    await add(product._id, q);
-  };
+  const q = Math.max(1, Math.min(stock, Number(qty || 1)));
+  await add(product._id, q);
+};
 
-  const onBuyNow = async () => {
-    setError("");
-    if (!product?._id) return setError("Product not found");
-    if (!inStock) return setError("Out of stock");
+const onBuyNow = async () => {
+  setError("");
+  if (!requireLogin()) return;
+  if (!product?._id) return setError("Product not found");
+  if (!inStock) return setError("Out of stock");
 
-    await add(product._id, 1);
-    selectOnly(product._id);
-    router.push("/user/dashboard/checkout");
-  };
+  const pid = String(product._id);
+
+  await add(pid, 1);
+  await refresh();        // ✅ important
+  selectOnly(pid);
+  router.push("/user/dashboard/checkout");
+};
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
@@ -124,7 +142,7 @@ export default function ShopProductDetailPage() {
         <div className="container mx-auto px-4 py-10">
           <div className="mb-6">
             <div className="text-sm text-slate-500">
-              <Link href="/user/dashboard/shop" className="hover:underline">
+              <Link href="/shop" className="hover:underline">
                 Shop
               </Link>{" "}
               / <span className="text-slate-700">{slug || "Product"}</span>
@@ -152,7 +170,7 @@ export default function ShopProductDetailPage() {
             <Card className="rounded-2xl p-6">
               <div className="text-slate-600">Product not found.</div>
               <div className="mt-4">
-                <Link href="/user/dashboard/shop">
+                <Link href="/shop">
                   <Button className="bg-green-600 hover:bg-green-700 text-white">Back to shop</Button>
                 </Link>
               </div>
@@ -264,13 +282,16 @@ export default function ShopProductDetailPage() {
   </Button>
 
   <Button
-    type="button"
-    variant="outline"
-    className="w-full h-11  border border-slate-800 bg-white text-slate-700 hover:bg-slate-50"
-    onClick={() => router.push("/user/dashboard/cart")}
-  >
-    Go to cart
-  </Button>
+  type="button"
+  variant="outline"
+  className="w-full h-11 border border-slate-800 bg-white text-slate-700 hover:bg-slate-50"
+  onClick={() => {
+    if (!requireLogin()) return;  // ✅ NEW
+    router.push("/user/dashboard/cart");
+  }}
+>
+  Go to cart
+</Button>
 </div>
                 </Card>
 

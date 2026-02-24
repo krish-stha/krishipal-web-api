@@ -16,7 +16,8 @@ import {
 } from "@/components/ui/sheet";
 import UserProfilePanel from "@/app/user/profile/UserProfilePanel";
 
-// ✅ adjust import path to where your UserProfilePanel actually is
+// ✅ public settings hook (same as Header.tsx)
+import { usePublicSettings } from "@/lib/api/hooks/usePublicSettings";
 
 type CookieUser = {
   name?: string;
@@ -38,27 +39,27 @@ type CookieUser = {
 
 const COOKIE_KEY = "krishipal_user";
 const USER_UPDATED_EVENT = "krishipal_user_updated";
-
-// ✅ NEW: close sheet event
 const PROFILE_CLOSE_EVENT = "krishipal_profile_close";
 
-// ✅ IMPORTANT: use BACKEND_URL (NO /api) for images
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
 
+// ---------------- helpers (same as Header.tsx) ----------------
 function normalizePhotoUrl(photo: string | null): string | null {
   if (!photo) return null;
 
   if (photo.startsWith("http://") || photo.startsWith("https://")) return photo;
 
-  // filename only -> /public/profile_photo/<filename>
-  if (!photo.includes("/")) return `${BACKEND_URL}/public/profile_photo/${photo}`;
+  if (!photo.includes("/"))
+    return `${BACKEND_URL}/public/profile_photo/${photo}`;
 
   if (photo.startsWith("public/")) return `${BACKEND_URL}/${photo}`;
   if (photo.startsWith("/public/")) return `${BACKEND_URL}${photo}`;
 
-  if (photo.startsWith("profile_photo/")) return `${BACKEND_URL}/public/${photo}`;
-  if (photo.startsWith("/profile_photo/")) return `${BACKEND_URL}/public${photo}`;
+  if (photo.startsWith("profile_photo/"))
+    return `${BACKEND_URL}/public/${photo}`;
+  if (photo.startsWith("/profile_photo/"))
+    return `${BACKEND_URL}/public${photo}`;
 
   if (!photo.startsWith("/")) return `${BACKEND_URL}/${photo}`;
   return `${BACKEND_URL}${photo}`;
@@ -104,15 +105,35 @@ function initials(name?: string, email?: string) {
   return "U";
 }
 
+function isRemoteUrl(src: string) {
+  return src.startsWith("http://") || src.startsWith("https://");
+}
+
+function resolveStoreLogo(storeLogo?: string | null) {
+  const v = String(storeLogo || "").trim();
+  if (!v) return "/images/krishipal_logo.png";
+
+  if (v.startsWith("http://") || v.startsWith("https://")) return v;
+  if (v.startsWith("/")) return v;
+
+  return `${BACKEND_URL}/public/store_logo/${v}`;
+}
+// -------------------------------------------------------------
+
 export function AdminHeader() {
   const { user, logout, isLoading } = useAuth();
 
-  // ✅ control sheet open/close
   const [profileOpen, setProfileOpen] = useState(false);
 
   const [cookieName, setCookieName] = useState("");
   const [cookieEmail, setCookieEmail] = useState("");
   const [cookiePhoto, setCookiePhoto] = useState<string | null>(null);
+
+  // ✅ public settings (store name/logo)
+  const settings: any = usePublicSettings();
+  const storeName =
+    String(settings?.storeName || "KrishiPal").trim() || "KrishiPal";
+  const storeLogo = resolveStoreLogo(settings?.storeLogo);
 
   const syncFromCookie = () => {
     const cu = getCookieUser();
@@ -130,7 +151,6 @@ export function AdminHeader() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.email]);
 
-  // ✅ close sheet when profile saved
   useEffect(() => {
     const close = () => setProfileOpen(false);
     window.addEventListener(PROFILE_CLOSE_EVENT, close);
@@ -148,14 +168,17 @@ export function AdminHeader() {
         {/* Left */}
         <Link href="/admin/users" className="flex items-center gap-3 shrink-0">
           <Image
-            src="/images/krishipal_logo.png"
-            alt="KrishiPal Logo"
+            src={storeLogo}
+            alt={`${storeName} Logo`}
             width={36}
             height={36}
             className="object-contain"
+            unoptimized={isRemoteUrl(storeLogo)} // ✅ quick fix for remote logo
           />
           <div className="leading-tight">
-            <div className="text-sm font-semibold text-slate-900">KrishiPal</div>
+            <div className="text-sm font-semibold text-slate-900">
+              {storeName}
+            </div>
             <div className="text-xs font-medium text-green-700">Admin Panel</div>
           </div>
         </Link>

@@ -8,9 +8,12 @@ import { Button } from "@/app/auth/components/ui/button"
 import { Input } from "@/app/auth/components/ui/input"
 import { validationRules } from "@/lib/validation"
 import { useAuth } from "@/lib/contexts/auth-contexts"
+import { useRouter, useSearchParams } from "next/navigation"
 
 export default function LoginPage() {
   const { login } = useAuth()
+  const router = useRouter()
+const searchParams = useSearchParams()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
@@ -39,6 +42,10 @@ export default function LoginPage() {
     setIsLoading(true)
     try {
       await login(email, password)
+
+      const next = searchParams.get("next")
+      router.replace(next || "/")
+
       // Redirect handled in AuthContext
     } catch (err: any) {
       setErrors({ general: err.message || "Invalid credentials. Please try again." })

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import React, { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 
 import { Header } from "../../component/header";
 import { Footer } from "../../component/footer";
@@ -33,8 +33,17 @@ type Category = {
 
 export default function ShopPage() {
   const router = useRouter();
-  const { add, selectOnly } = useCart();
+  const { add, selectOnly, refresh } = useCart();
   const { user } = useAuth();
+  const pathname = usePathname();
+
+
+  const requireLogin = () => {
+  if (user) return true;
+  const ok = window.confirm("Need to login first to continue. Go to login?");
+  if (ok) router.push(`/auth/login?next=${encodeURIComponent(pathname)}`);
+  return false;
+};
 
   // ✅ dynamic low stock threshold (from public settings)
   const [lowStockThreshold, setLowStockThreshold] = useState<number>(5);
@@ -161,14 +170,18 @@ export default function ShopPage() {
   };
 
   const goProduct = (slug: string) => {
-    router.push(`/user/dashboard/shop/${slug}`);
-  };
+  router.push(`/shop/${slug}`);
+};
 
   const buyNow = async (productId: string) => {
-    await add(productId, 1);
-    selectOnly(productId);
-    router.push("/user/dashboard/checkout");
-  };
+  const pid = String(productId);
+
+  await add(pid, 1);
+
+    await refresh();        // ✅ important
+  selectOnly(pid);        // ✅ now cart has that item, so selection works
+  router.push("/user/dashboard/checkout");
+};
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
@@ -197,9 +210,17 @@ export default function ShopPage() {
                   )}
 
                   <Link href="/user/dashboard/cart">
-                    <Button className="bg-green-600 hover:bg-green-700 text-white h-10 rounded-xl">
-                      View Cart
-                    </Button>
+                  <Button
+  className="bg-green-600 hover:bg-green-700 text-white h-10 rounded-xl"
+  onClick={(e) => {
+    e.preventDefault();
+    if (!requireLogin()) return;
+    router.push("/user/dashboard/cart");
+  }}
+>
+  View Cart
+</Button>
+                    
                   </Link>
                 </div>
               </div>
@@ -406,11 +427,12 @@ export default function ShopPage() {
 
                       {/* ✅ Actions (stopPropagation so it doesn’t open details) */}
                       <div className="p-3 pt-0 grid grid-cols-1 gap-2">
-  <Button
+ <Button
   type="button"
   className="flex-1 bg-white text-slate-900 border-2 border-slate-800 hover:bg-slate-50"
   onClick={(e) => {
     e.stopPropagation();
+    if (!requireLogin()) return;   // ✅ NEW
     add(p._id, 1);
   }}
   disabled={!inStock}
@@ -423,6 +445,7 @@ export default function ShopPage() {
   className="flex-1 bg-green-700 hover:bg-green-800 text-white"
   onClick={(e) => {
     e.stopPropagation();
+    if (!requireLogin()) return;   // ✅ NEW
     buyNow(p._id);
   }}
   disabled={!inStock}

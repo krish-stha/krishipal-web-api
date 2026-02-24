@@ -7,6 +7,7 @@ import { Button } from "@/app/auth/components/ui/button";
 import { useAuth } from "@/lib/contexts/auth-contexts";
 import Cookies from "js-cookie";
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useCart } from "@/lib/contexts/cart-context";
 
 import {
@@ -133,7 +134,7 @@ function resolveStoreLogo(storeLogo?: string | null) {
 export function Header() {
   const { user, isLoading, logout } = useAuth();
   const { count } = useCart();
-
+  const router = useRouter();
   // ✅ control sheet open/close
   const [profileOpen, setProfileOpen] = useState(false);
 
@@ -148,6 +149,14 @@ export function Header() {
   // if you store logo in settings (ex: "/images/krishipal_logo.png" OR full URL)
   // IMPORTANT: if it's remote, Next/Image might require next.config. Using unoptimized fixes quickly.
   const storeLogo = resolveStoreLogo(settings?.storeLogo);
+
+  const onCartClick = (e: React.MouseEvent) => {
+  if (user) return; // logged in -> allow navigation
+  e.preventDefault();
+
+  const ok = window.confirm("Need to login first to view cart. Go to login?");
+  if (ok) router.push("/auth/login");
+};
 
   const syncFromCookie = () => {
     const cu = getCookieUser();
@@ -205,25 +214,25 @@ export function Header() {
             Home
           </Link>
           <Link
-            href="/user/dashboard/about"
+            href="/about"
             className="text-gray-700 hover:text-green-600"
           >
             About
           </Link>
           <Link
-            href="/user/dashboard/blogs"
+            href="/blogs"
             className="text-gray-700 hover:text-green-600"
           >
             Blogs
           </Link>
           <Link
-            href="/user/dashboard/contact"
+            href="/contact"
             className="text-gray-700 hover:text-green-600"
           >
             Contact
           </Link>
           <Link
-            href="/user/dashboard/shop"
+            href="/shop"
             className="text-gray-700 hover:text-green-600"
           >
             Shop
@@ -250,12 +259,12 @@ export function Header() {
 
         {/* Cart + Profile */}
         <div className="flex items-center gap-4">
-          <Link href="/user/dashboard/cart" className="relative">
-            <ShoppingCart className="h-6 w-6 text-gray-700" />
-            <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-              {count}
-            </span>
-          </Link>
+          <Link href="/user/dashboard/cart" className="relative" onClick={onCartClick}>
+  <ShoppingCart className="h-6 w-6 text-gray-700" />
+  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+    {count}
+  </span>
+</Link>
 
           {!isLoading && user && (
             <Sheet open={profileOpen} onOpenChange={setProfileOpen}>
