@@ -98,4 +98,8 @@ settings: {
   public: "/settings/public",
 },
 
+about: {
+  public: "/about", 
+}
+
 };

@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+
 import { Header } from "../../component/header";
 import { Footer } from "../../component/footer";
 import { Button } from "@/app/auth/components/ui/button";
@@ -15,7 +17,6 @@ import { getPublicSettings } from "@/lib/api/settings";
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
 
 function productImageUrl(filename?: string | null) {
-
   return `${BACKEND_URL}/public/product_images/${filename}`;
 }
 
@@ -31,7 +32,8 @@ type Category = {
 };
 
 export default function ShopPage() {
-  const { add } = useCart();
+  const router = useRouter();
+  const { add, selectOnly } = useCart();
   const { user } = useAuth();
 
   // ✅ dynamic low stock threshold (from public settings)
@@ -56,29 +58,28 @@ export default function ShopPage() {
   const [page, setPage] = useState(1);
   const limit = 12;
 
+  const debounceRef = useRef<any>(null);
+  const didMountRef = useRef(false);
+
   // ✅ load low stock threshold once
   useEffect(() => {
-  let alive = true;
+    let alive = true;
 
-  (async () => {
-    try {
-      const s = await getPublicSettings();
+    (async () => {
+      try {
+        const s = await getPublicSettings();
+        const t = Number(s?.data?.lowStockThreshold ?? 5);
+        if (!alive) return;
+        setLowStockThreshold(Number.isFinite(t) ? Math.max(1, t) : 5);
+      } catch {
+        // keep default
+      }
+    })();
 
-      console.log("PUBLIC SETTINGS RAW:", s); // ✅ add this
-      console.log("PUBLIC SETTINGS lowStockThreshold:", s?.lowStockThreshold); // ✅ add this
-
-      const t = Number(s?.data?.lowStockThreshold ?? 5);
-      if (!alive) return;
-      setLowStockThreshold(Number.isFinite(t) ? Math.max(1, t) : 5);
-    } catch (e) {
-      console.log("PUBLIC SETTINGS ERROR:", e); // optional
-    }
-  })();
-
-  return () => {
-    alive = false;
-  };
-}, []);
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   // load categories
   useEffect(() => {
@@ -130,17 +131,43 @@ export default function ShopPage() {
     }
   };
 
-  // initial + whenever filters change
+  // initial + realtime search (debounced) + filters
   useEffect(() => {
-    setPage(1);
-    fetchProducts(1, "replace");
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      setPage(1);
+      fetchProducts(1, "replace");
+      return;
+    }
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    debounceRef.current = setTimeout(() => {
+      setPage(1);
+      fetchProducts(1, "replace");
+    }, 350);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sort, selectedCategorySlug, onlyInStock]);
+  }, [search, selectedCategorySlug, sort, onlyInStock]);
 
   const onSearch = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (debounceRef.current) clearTimeout(debounceRef.current);
     setPage(1);
     await fetchProducts(1, "replace");
+  };
+
+  const goProduct = (slug: string) => {
+    router.push(`/user/dashboard/shop/${slug}`);
+  };
+
+  const buyNow = async (productId: string) => {
+    await add(productId, 1);
+    selectOnly(productId);
+    router.push("/user/dashboard/checkout");
   };
 
   return (
@@ -234,9 +261,6 @@ export default function ShopPage() {
                     {loading ? "Loading…" : `${products.length} items`}
                   </div>
                 </div>
-
-                {/* optional debug */}
-                {/* <div className="mt-2 text-xs text-slate-400">Low stock threshold: {lowStockThreshold}</div> */}
               </form>
             </div>
           </div>
@@ -287,32 +311,11 @@ export default function ShopPage() {
                     </div>
                   </div>
                 </Card>
-
-                <div className="mt-4 rounded-2xl border bg-white p-5">
-                  <div className="text-sm font-semibold text-slate-900">Tips</div>
-                  <ul className="mt-2 text-sm text-slate-600 space-y-1 list-disc pl-5">
-                    <li>Use search for SKU / name</li>
-                    <li>Sort by price to compare quickly</li>
-                    <li>Toggle stock filter if needed</li>
-                  </ul>
-                </div>
               </div>
             </aside>
 
             {/* Main */}
             <div className="lg:col-span-9">
-              <div className="flex items-center justify-between mb-4">
-                <div className="text-sm text-slate-600">
-                  {selectedCategorySlug ? (
-                    <span>
-                      Category: <b className="text-slate-900">{selectedCategorySlug}</b>
-                    </span>
-                  ) : (
-                    <span>Showing all products</span>
-                  )}
-                </div>
-              </div>
-
               {error && (
                 <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                   {error}
@@ -330,8 +333,6 @@ export default function ShopPage() {
 
                   const displayPrice = hasDiscount ? p.discountPrice : p.price;
                   const inStock = Number(p.stock ?? 0) > 0;
-
-                  // ✅ dynamic threshold
                   const low = inStock && Number(p.stock ?? 0) <= lowStockThreshold;
 
                   return (
@@ -339,7 +340,16 @@ export default function ShopPage() {
                       key={p._id}
                       className="group rounded-2xl border bg-white overflow-hidden shadow-sm hover:shadow-md transition"
                     >
-                      <Link href={`/user/dashboard/shop/${p.slug}`} className="block">
+                      {/* ✅ Click card opens detail page */}
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => goProduct(p.slug)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") goProduct(p.slug);
+                        }}
+                        className="block cursor-pointer"
+                      >
                         <div className="relative h-44 bg-slate-50 flex items-center justify-center overflow-hidden">
                           <img
                             src={productImageUrl(firstImage)}
@@ -353,13 +363,11 @@ export default function ShopPage() {
                                 Sale
                               </span>
                             )}
-
                             {low && (
                               <span className="text-xs px-2 py-1 rounded-full bg-amber-50 text-amber-700 font-semibold">
                                 Low stock
                               </span>
                             )}
-
                             {!inStock && (
                               <span className="text-xs px-2 py-1 rounded-full bg-slate-200 text-slate-700 font-semibold">
                                 Out
@@ -394,24 +402,34 @@ export default function ShopPage() {
                             </div>
                           </div>
                         </div>
-                      </Link>
-
-                      <div className="p-3 pt-0 flex gap-2">
-                        <Button
-                          className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-                          onClick={() => add(p._id, 1)}
-                          disabled={!inStock}
-                        >
-                          {inStock ? "Add to cart" : "Out of stock"}
-                        </Button>
-
-                        <Link
-                          href={`/user/dashboard/shop/${p.slug}`}
-                          className="h-10 px-3 rounded-xl border border-slate-300 flex items-center justify-center text-sm hover:bg-slate-50"
-                        >
-                          View
-                        </Link>
                       </div>
+
+                      {/* ✅ Actions (stopPropagation so it doesn’t open details) */}
+                      <div className="p-3 pt-0 grid grid-cols-1 gap-2">
+  <Button
+  type="button"
+  className="flex-1 bg-white text-slate-900 border-2 border-slate-800 hover:bg-slate-50"
+  onClick={(e) => {
+    e.stopPropagation();
+    add(p._id, 1);
+  }}
+  disabled={!inStock}
+>
+  Add to cart
+</Button>
+
+<Button
+  type="button"
+  className="flex-1 bg-green-700 hover:bg-green-800 text-white"
+  onClick={(e) => {
+    e.stopPropagation();
+    buyNow(p._id);
+  }}
+  disabled={!inStock}
+>
+  Buy it now
+</Button>
+</div>
                     </div>
                   );
                 })}

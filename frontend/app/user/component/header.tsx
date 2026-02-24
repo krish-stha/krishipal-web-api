@@ -238,13 +238,6 @@ export function Header() {
             </Link>
           )}
 
-          <Link
-            href="/user/dashboard/search"
-            className="text-gray-700 hover:text-green-600"
-          >
-            Search
-          </Link>
-
           {user?.role === "admin" && (
             <Link
               href="/admin/users"

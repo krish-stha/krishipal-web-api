@@ -3,10 +3,15 @@ import { endpoints } from "./endpoints";
 
 type PaymentMethod = "COD" | "KHALTI" | "ESEWA";
 
-export async function createOrder(payload: { address: string; paymentMethod?: PaymentMethod  }) {
+export async function createOrder(payload: {
+  address: string;
+  paymentMethod: string;
+  selectedProductIds?: string[];
+}){
   const res = await api.post(endpoints.orders.create, {
     address: payload.address,
     paymentMethod: payload.paymentMethod ?? "COD",
+    selectedProductIds: payload.selectedProductIds ?? []
   });
   return res.data;
 }

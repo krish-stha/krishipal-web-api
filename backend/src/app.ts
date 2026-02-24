@@ -22,6 +22,8 @@ import blogRoutes from "./routes/blog.routes";
 import adminDashboardRoutes from "./routes/admin.dashboard.route";
 import adminSettingsRoutes from "./routes/admin.settings.route";
 import settingsRoutes from "./routes/settings.route";
+import adminAboutRoutes from "./routes/admin.about.route";
+import aboutRoutes from "./routes/about.route";
 
 const app = express();
 
@@ -69,6 +71,8 @@ app.use("/api/admin", adminBlogRoutes);
 app.use("/api/admin", adminDashboardRoutes);
 app.use("/api/admin", adminSettingsRoutes);
 app.use("/api/settings", settingsRoutes);
+app.use("/api/admin", adminAboutRoutes);
+app.use("/api", aboutRoutes);
 
 
 

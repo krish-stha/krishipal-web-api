@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { FileText } from "lucide-react";
+import { Info } from "lucide-react";
 import {
   LayoutDashboard,
   Users,
@@ -84,6 +85,7 @@ export function AdminSidebar() {
       </nav>
 
       <NavItem href="/admin/blogs" label="Blogs" icon={FileText} />
+      <NavItem href="/admin/about" label="About" icon={Info} />
 
       <SectionTitle title="CUSTOMERS" />
       <nav className="space-y-1">

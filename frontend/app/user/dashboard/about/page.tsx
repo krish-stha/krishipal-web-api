@@ -1,26 +1,51 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Header } from "@/app/user/component/header";
 import { Footer } from "@/app/user/component/footer";
 import { getPublicSettings } from "@/lib/api/settings";
+import { getPublicAbout } from "@/lib/api/about";
+
+function backendPublic(pathname: string) {
+  const base = (process.env.NEXT_PUBLIC_BACKEND_URL || "").replace(/\/$/, "");
+  if (!pathname) return "";
+  if (pathname.startsWith("http://") || pathname.startsWith("https://")) return pathname;
+  if (pathname.startsWith("/")) return `${base}${pathname}`;
+  return `${base}/public/${pathname}`;
+}
 
 export default function AboutPage() {
   const [storeName, setStoreName] = useState("KrishiPal");
+  const [about, setAbout] = useState<any>(null);
+
+  const missionImg = useMemo(() => {
+    const fn = String(about?.missionImage || "");
+    return fn ? backendPublic(`about/${fn}`) : "/images/farmers-working-in-green-rice-paddy-field.png";
+  }, [about?.missionImage]);
+
+  const visionImg = useMemo(() => {
+    const fn = String(about?.visionImage || "");
+    return fn ? backendPublic(`about/${fn}`) : "/images/modern-greenhouse-agricultural-technology.png";
+  }, [about?.visionImage]);
 
   useEffect(() => {
     let alive = true;
 
     (async () => {
       try {
-        const res = await getPublicSettings(); // { success, data }
-        const data = res?.data ?? res ?? {};
-        const name = String(data?.storeName || "").trim();
-        if (!alive) return;
-        if (name) setStoreName(name);
+        const sres = await getPublicSettings();
+        const sdata = sres?.data ?? sres ?? {};
+        const name = String(sdata?.storeName || "").trim();
+        if (alive && name) setStoreName(name);
+      } catch {}
+
+      try {
+        const ares = await getPublicAbout(); // { success, data }
+        const adata = ares?.data ?? ares ?? null;
+        if (alive) setAbout(adata);
       } catch {
-        // keep default
+        if (alive) setAbout(null);
       }
     })();
 
@@ -29,74 +54,75 @@ export default function AboutPage() {
     };
   }, []);
 
+  const heroTitle = about?.heroTitle || `About ${storeName}`;
+  const heroDescription =
+    about?.heroDescription ||
+    `${storeName} is your go-to platform for all things agriculture. We provide products and resources to support your agricultural needs.`;
+
+  const missionTitle = about?.missionTitle || "Our Mission";
+  const missionBody = about?.missionBody || "Our mission is to empower farmers with quality products and expert support.";
+
+  const visionTitle = about?.visionTitle || "Our Vision";
+  const visionBody = about?.visionBody || "We envision a sustainable ecosystem where technology meets tradition in agriculture.";
+
+  const socials = Array.isArray(about?.socials) ? about.socials : [];
+
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
 
       <main className="flex-1">
         <div className="container mx-auto px-4 py-12">
-          <h1 className="text-4xl font-bold text-center mb-6">
-            About {storeName}
-          </h1>
+          {/* HERO */}
+          <div className="text-center mb-14">
+            <h1 className="text-4xl font-bold mb-4">{heroTitle}</h1>
+            <p className="text-gray-600 max-w-3xl mx-auto text-lg leading-relaxed">{heroDescription}</p>
 
-          <p className="text-center text-gray-600 max-w-3xl mx-auto mb-16 text-lg leading-relaxed">
-            {storeName} is your go-to platform for all things agriculture.
-            Whether you are a farmer, agronomist, or gardening enthusiast, we
-            provide a wide range of products and resources to support your
-            agricultural needs.
-          </p>
+            {socials.length > 0 ? (
+              <div className="mt-6 flex flex-wrap justify-center gap-2">
+                {socials.map((s: any, idx: number) => (
+                  <a
+                    key={idx}
+                    href={s.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center rounded-full border px-4 py-2 text-sm hover:bg-slate-50"
+                  >
+                    {s.label || s.url}
+                  </a>
+                ))}
+              </div>
+            ) : null}
+          </div>
 
-          {/* Our Mission Section */}
+          {/* MISSION */}
           <div className="grid md:grid-cols-2 gap-12 items-center mb-20">
             <div>
-              <h2 className="text-3xl font-bold mb-6">Our Mission</h2>
-              <p className="text-gray-700 leading-relaxed text-lg">
-                Our mission is to empower farmers and agriculturalists by
-                providing them with high-quality products, expert advice, and a
-                platform to connect and share knowledge.
-              </p>
+              <h2 className="text-3xl font-bold mb-6">{missionTitle}</h2>
+              <p className="text-gray-700 leading-relaxed text-lg">{missionBody}</p>
             </div>
             <div className="relative h-[400px] rounded-2xl overflow-hidden shadow-lg">
-              <Image
-                src="/images/farmers-working-in-green-rice-paddy-field.png"
-                alt="Farmers in field"
-                fill
-                className="object-cover"
-              />
+              <Image src={missionImg} alt="Mission" fill className="object-cover" unoptimized />
             </div>
           </div>
 
-          {/* Our Vision Section */}
+          {/* VISION */}
           <div className="grid md:grid-cols-2 gap-12 items-center mb-20">
             <div className="relative h-[400px] rounded-2xl overflow-hidden shadow-lg order-2 md:order-1">
-              <Image
-                src="/images/modern-greenhouse-agricultural-technology.png"
-                alt="Modern agriculture"
-                fill
-                className="object-cover"
-              />
+              <Image src={visionImg} alt="Vision" fill className="object-cover" unoptimized />
             </div>
             <div className="order-1 md:order-2">
-              <h2 className="text-3xl font-bold mb-6">Our Vision</h2>
-              <p className="text-gray-700 leading-relaxed text-lg">
-                We envision a sustainable agricultural ecosystem where
-                technology meets tradition, fostering innovation and growth in
-                agriculture.
-              </p>
+              <h2 className="text-3xl font-bold mb-6">{visionTitle}</h2>
+              <p className="text-gray-700 leading-relaxed text-lg">{visionBody}</p>
             </div>
           </div>
 
-          {/* Agriculture Blogs Section */}
-          <div className="mb-12">
-            <h2 className="text-3xl font-bold mb-4">Agriculture Blogs</h2>
-            <p className="text-gray-700 mb-4 leading-relaxed">
-              Explore our collection of insightful agriculture blogs, covering a
-              wide range of topics including farming techniques, crop
-              management, agricultural news, and more.
-            </p>
+          {/* OPTIONAL SECTION (nice professional ending) */}
+          <div className="rounded-2xl border bg-white p-8 shadow-sm">
+            <h3 className="text-2xl font-bold mb-3">What we do</h3>
             <p className="text-gray-700 leading-relaxed">
-              Stay informed and connected with the latest trends and
-              developments in agriculture through our dedicated blog section.
+              We help farmers and growers discover trusted agriculture products, make smarter purchase decisions, and
+              improve productivity through curated content and practical tools.
             </p>
           </div>
         </div>

@@ -39,12 +39,19 @@ export class OrderController {
   async createFromCart(req: AuthRequest, res: Response) {
     const userId = mustUserId(req);
 
-    const address = String(req.body?.address ?? "").trim();
-    const paymentMethod = String(req.body?.paymentMethod ?? "COD").trim().toUpperCase();
+    const { address, paymentMethod, selectedProductIds } = req.body as {
+    address?: string;
+    paymentMethod?: string;
+    selectedProductIds?: string[];
+  };
+    
 
-    if (!address) throw new HttpError(400, "Address is required");
+    const addr = String(address ?? "").trim();
+    const pay = String(paymentMethod ?? "COD").trim().toUpperCase();
 
-    if (!["COD", "KHALTI", "ESEWA"].includes(paymentMethod)) {
+    if (!addr) throw new HttpError(400, "Address is required");
+
+    if (!["COD", "KHALTI", "ESEWA"].includes(pay)) {
       throw new HttpError(400, "Invalid paymentMethod");
     }
        
@@ -56,8 +63,22 @@ export class OrderController {
       throw new HttpError(400, "Cart is empty");
     }
 
+    // ✅ If selectedProductIds provided, order only those cart items
+// ✅ If selectedProductIds provided, order only those cart items
+let cartItems: any[] = Array.isArray((cart as any)?.items) ? (cart as any).items : [];
+
+if (Array.isArray(selectedProductIds) && selectedProductIds.length > 0) {
+  const selectedSet = new Set(selectedProductIds.map(String));
+
+  cartItems = cartItems.filter((it: any) => selectedSet.has(String(it.product)));
+
+  if (cartItems.length === 0) {
+    throw new HttpError(400, "No selected items found in cart");
+  }
+}
+
     // 2) validate products in bulk
-    const productIds = cart.items.map((it: any) => it.product).filter(Boolean);
+    const productIds = cartItems.map((it: any) => it.product).filter(Boolean);
     const products = await ProductModel.find({
       _id: { $in: productIds },
       deleted_at: null,
@@ -70,7 +91,7 @@ export class OrderController {
     for (const p of products) byId.set(String(p._id), p);
 
     // validate stock + build snapshot items
-    const orderItems = cart.items.map((it: any) => {
+    const orderItems = cartItems.map((it: any) => {
       const pid = String(it.product);
       const p = byId.get(pid);
 
@@ -111,9 +132,9 @@ export class OrderController {
 
 // ✅ enforce enabled payments
     const enabled = settings?.payments || { COD: true, KHALTI: true, ESEWA: true };
-    if (paymentMethod === "COD" && !enabled.COD) throw new HttpError(400, "COD is disabled");
-    if (paymentMethod === "KHALTI" && !enabled.KHALTI) throw new HttpError(400, "Khalti is disabled");
-    if (paymentMethod === "ESEWA" && !enabled.ESEWA) throw new HttpError(400, "eSewa is disabled");
+    if (pay === "COD" && !enabled.COD) throw new HttpError(400, "COD is disabled");
+    if (pay === "KHALTI" && !enabled.KHALTI) throw new HttpError(400, "Khalti is disabled");
+    if (pay === "ESEWA" && !enabled.ESEWA) throw new HttpError(400, "eSewa is disabled");
 
     // ✅ shipping fee rules
     const shippingFeeDefault = Number(settings?.shippingFeeDefault ?? 0);
@@ -163,16 +184,25 @@ try {
         shippingFee,
         total,
         status: "pending",
-        address,
-        paymentMethod: paymentMethod as any,
-        paymentGateway: paymentMethod as any,
+        address: addr,
+        paymentMethod: pay as any,
+        paymentGateway: pay as any,
       },
     ],
     { session }
   );
 
   // ✅ 3) CLEAR CART
+  if (Array.isArray(selectedProductIds) && selectedProductIds.length > 0) {
+  await CartModel.updateOne(
+    { user: userId },
+    { $pull: { items: { product: { $in: selectedProductIds.map((id) => new mongoose.Types.ObjectId(id)) } } } },
+    { session }
+  );
+} else {
+  // normal checkout => clear cart
   await CartModel.updateOne({ user: userId }, { $set: { items: [] } }, { session });
+}
 
   await session.commitTransaction();
 
@@ -202,13 +232,26 @@ try {
       shippingFee,
       total,
       status: "pending",
-      address,
-      paymentMethod: paymentMethod as any,
-      paymentGateway: paymentMethod as any,
+      address: addr,
+      paymentMethod: pay as any,
+      paymentGateway: pay as any,
     });
 
     // ✅ clear cart
-    await CartModel.updateOne({ user: userId }, { $set: { items: [] } });
+    if (Array.isArray(selectedProductIds) && selectedProductIds.length > 0) {
+  await CartModel.updateOne(
+    { user: userId },
+    {
+      $pull: {
+        items: {
+          product: { $in: selectedProductIds.map((id) => new mongoose.Types.ObjectId(id)) },
+        },
+      },
+    }
+  );
+} else {
+  await CartModel.updateOne({ user: userId }, { $set: { items: [] } });
+}
 
     return res.status(201).json({ success: true, data: created });
   }
@@ -426,7 +469,7 @@ async cancelMyOrder(req: AuthRequest, res: Response) {
     } catch {}
 
     // ✅ fallback if transactions not supported
-    if (String(err?.message || "").includes("Transaction numbers are only allowed")) {
+    if (String(err?.message || "").toLowerCase().includes("transaction")) {
       const order = await OrderModel.findOne({ _id: id, user: userId, deleted_at: null });
       if (!order) throw new HttpError(404, "Order not found");
 

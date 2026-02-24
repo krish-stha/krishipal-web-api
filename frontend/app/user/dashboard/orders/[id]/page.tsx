@@ -9,10 +9,13 @@ import { cancelMyOrder, getMyOrderById } from "@/lib/api/order";
 import { initiateKhaltiPayment } from "@/lib/api/payment";
 import { endpoints } from "@/lib/api/endpoints";
 import { getToken } from "@/lib/cookie";
+import { getPublicSettings } from "@/lib/api/settings";
 
 // ✅ you already have this
 import { requestRefund, getMyRefunds } from "@/lib/api/refund";
 // if you DON'T have getMyRefunds yet, comment it and refunds UI will still work without crashing.
+
+type PaymentMethod = "COD" | "KHALTI" | "ESEWA";
 
 function money(n: any) {
   const v = Number(n ?? 0);
@@ -31,7 +34,8 @@ function statusLabel(s?: string) {
 
 function refundStatusBadge(status: string) {
   const s = String(status || "").toLowerCase();
-  const base = "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold border";
+  const base =
+    "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold border";
 
   if (s === "requested") return `${base} bg-amber-50 text-amber-700 border-amber-200`;
   if (s === "approved") return `${base} bg-blue-50 text-blue-700 border-blue-200`;
@@ -59,10 +63,51 @@ export default function TrackOrderPage() {
   const [error, setError] = useState("");
   const [order, setOrder] = useState<any>(null);
 
-  // ✅ NEW: refunds state
+  // ✅ refunds state
   const [refunds, setRefunds] = useState<any[]>([]);
 
-  const [paymentChoice, setPaymentChoice] = useState<"COD" | "KHALTI" | "ESEWA">("COD");
+  // ✅ settings-driven payments (same idea as checkout)
+  const [settings, setSettings] = useState<any>(null);
+  const [payments, setPayments] = useState<{ COD: boolean; KHALTI: boolean; ESEWA: boolean }>({
+    COD: true,
+    KHALTI: true,
+    ESEWA: true,
+  });
+
+  const [paymentChoice, setPaymentChoice] = useState<PaymentMethod>("COD");
+
+  const fetchSettings = async () => {
+    try {
+      const res = await getPublicSettings();
+      const s = res?.data || null;
+      setSettings(s);
+
+      const p = s?.payments || {};
+      const normalized = {
+        COD: !!p.COD,
+        KHALTI: !!p.KHALTI,
+        ESEWA: !!p.ESEWA,
+      };
+
+      setPayments(normalized);
+
+      // pick first enabled payment as default
+      const firstEnabled: PaymentMethod | null = normalized.COD
+        ? "COD"
+        : normalized.KHALTI
+          ? "KHALTI"
+          : normalized.ESEWA
+            ? "ESEWA"
+            : null;
+
+      if (firstEnabled) setPaymentChoice(firstEnabled);
+    } catch {
+      // fallback (don’t block page)
+      setSettings(null);
+      setPayments({ COD: true, KHALTI: true, ESEWA: true });
+      // keep current paymentChoice as-is
+    }
+  };
 
   const fetchOrder = async () => {
     if (!isValidObjectId(id)) {
@@ -83,7 +128,7 @@ export default function TrackOrderPage() {
     }
   };
 
-  // ✅ NEW: fetch refunds (safe)
+  // ✅ fetch refunds (safe)
   const fetchRefunds = async () => {
     try {
       // If you don't have this endpoint yet, this will throw.
@@ -101,6 +146,7 @@ export default function TrackOrderPage() {
     if (id) {
       fetchOrder();
       fetchRefunds();
+      fetchSettings(); // ✅ NEW
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
@@ -125,10 +171,7 @@ export default function TrackOrderPage() {
   const activeIndex = Math.max(0, steps.indexOf(currentStatus as any));
 
   const canCancel = currentStatus === "pending" && paymentStatus !== "paid";
-  const canPay =
-  ["pending", "confirmed", "shipped"].includes(currentStatus) &&
-  paymentStatus !== "paid";
-
+  const canPay = ["pending", "confirmed", "shipped"].includes(currentStatus) && paymentStatus !== "paid";
 
   // ✅ refund only if paid + pending/confirmed
   const canRequestRefund = paymentStatus === "paid" && (currentStatus === "pending" || currentStatus === "confirmed");
@@ -183,31 +226,40 @@ export default function TrackOrderPage() {
   };
 
   const onPay = async () => {
-  setError("");
+    setError("");
 
-  if (paymentChoice === "KHALTI") {
-    setLoading(true);
-    try {
-      const res = await initiateKhaltiPayment(id);
-      const paymentUrl = res?.data?.payment_url;
-      if (!paymentUrl) throw new Error("No payment_url received");
-      window.location.href = paymentUrl;
-    } catch (e: any) {
-      setError(e?.response?.data?.message || e?.message || "Failed to initiate Khalti");
-    } finally {
-      setLoading(false);
+    // ✅ final safety check (settings-driven)
+    if (
+      (paymentChoice === "COD" && !payments.COD) ||
+      (paymentChoice === "KHALTI" && !payments.KHALTI) ||
+      (paymentChoice === "ESEWA" && !payments.ESEWA)
+    ) {
+      setError("Selected payment method is disabled.");
+      return;
     }
-    return;
-  }
 
-  if (paymentChoice === "ESEWA") {
-    router.push(`/payments/esewa/redirect?orderId=${id}`);
-    return;
-  }
+    if (paymentChoice === "KHALTI") {
+      setLoading(true);
+      try {
+        const res = await initiateKhaltiPayment(id);
+        const paymentUrl = res?.data?.payment_url;
+        if (!paymentUrl) throw new Error("No payment_url received");
+        window.location.href = paymentUrl;
+      } catch (e: any) {
+        setError(e?.response?.data?.message || e?.message || "Failed to initiate Khalti");
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
 
-  setError("Pay Now is only for Khalti/eSewa payments.");
-};
+    if (paymentChoice === "ESEWA") {
+      router.push(`/payments/esewa/redirect?orderId=${id}`);
+      return;
+    }
 
+    setError("Pay Now is only for Khalti/eSewa payments.");
+  };
 
   // ✅ FIX: Single prompt only (no double OK)
   // User types: "amount | reason"
@@ -255,6 +307,10 @@ export default function TrackOrderPage() {
     }
   };
 
+  const showPayNow =
+    canPay &&
+    ((paymentChoice === "KHALTI" && payments.KHALTI) || (paymentChoice === "ESEWA" && payments.ESEWA));
+
   return (
     <div className="p-6">
       <div className="mb-6 flex items-start justify-between gap-3">
@@ -269,19 +325,19 @@ export default function TrackOrderPage() {
             Back
           </Button>
 
-          
-        {canPay && (paymentChoice === "KHALTI" || paymentChoice === "ESEWA") && (
-          <Button
-            className={paymentChoice === "KHALTI"
-              ? "bg-purple-600 hover:bg-purple-700 text-white"
-              : "bg-green-600 hover:bg-green-700 text-white"}
-            onClick={onPay}
-            disabled={loading}
-          >
-            {loading ? "Processing..." : `Pay Now (${paymentChoice})`}
-          </Button>
-        )}
-
+          {showPayNow && (
+            <Button
+              className={
+                paymentChoice === "KHALTI"
+                  ? "bg-purple-600 hover:bg-purple-700 text-white"
+                  : "bg-green-600 hover:bg-green-700 text-white"
+              }
+              onClick={onPay}
+              disabled={loading}
+            >
+              {loading ? "Processing..." : `Pay Now (${paymentChoice})`}
+            </Button>
+          )}
 
           {canCancel && (
             <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={onCancel} disabled={loading}>
@@ -426,7 +482,9 @@ export default function TrackOrderPage() {
                           <div className="text-sm text-slate-700">
                             Rs. {Math.floor(Number(r.amountPaisa || 0) / 100)}
                           </div>
-                          <span className={refundStatusBadge(String(r.status))}>{String(r.status).toUpperCase()}</span>
+                          <span className={refundStatusBadge(String(r.status))}>
+                            {String(r.status).toUpperCase()}
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -453,30 +511,47 @@ export default function TrackOrderPage() {
             {canPay && (
               <div className="mt-4">
                 <div className="text-sm font-semibold text-slate-900">Payment Method</div>
-                <div className="mt-2 flex gap-3 text-sm">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="pay"
-                      checked={paymentChoice === "COD"}
-                      onChange={() => setPaymentChoice("COD")}
-                    />
-                    COD
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="pay"
-                      checked={paymentChoice === "KHALTI"}
-                      onChange={() => setPaymentChoice("KHALTI")}
-                    />
-                    Khalti
-                  </label>
 
-                  <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="radio" name="pay" checked={paymentChoice === "ESEWA"} onChange={() => setPaymentChoice("ESEWA")} />
-                   eSewa
-                  </label>
+                <div className="mt-2 flex flex-wrap gap-4 text-sm">
+                  {payments.COD && (
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="pay"
+                        checked={paymentChoice === "COD"}
+                        onChange={() => setPaymentChoice("COD")}
+                      />
+                      COD
+                    </label>
+                  )}
+
+                  {payments.KHALTI && (
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="pay"
+                        checked={paymentChoice === "KHALTI"}
+                        onChange={() => setPaymentChoice("KHALTI")}
+                      />
+                      Khalti
+                    </label>
+                  )}
+
+                  {payments.ESEWA && (
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="pay"
+                        checked={paymentChoice === "ESEWA"}
+                        onChange={() => setPaymentChoice("ESEWA")}
+                      />
+                      eSewa
+                    </label>
+                  )}
+
+                  {!payments.COD && !payments.KHALTI && !payments.ESEWA && (
+                    <div className="text-xs text-rose-600">No payment methods enabled (admin settings).</div>
+                  )}
                 </div>
               </div>
             )}
