@@ -18,10 +18,19 @@ export class AdminProductController {
     return res.status(201).json({ success: true, data: created });
   }
 
-  async list(_req: Request, res: Response) {
-    const data = await service.listAdmin();
-    return res.status(200).json({ success: true, data });
-  }
+  async list(req: Request, res: Response) {
+  const page = Math.max(1, Number(req.query.page ?? 1));
+  const limit = Math.min(50, Math.max(1, Number(req.query.limit ?? 10)));
+  const search = String(req.query.search ?? "").trim();
+
+  const result = await service.listAdmin({ page, limit, search });
+
+  return res.status(200).json({
+    success: true,
+    data: result.data,
+    meta: result.meta,
+  });
+}
 
   async getById(req: Request, res: Response) {
     const data = await service.getById(req.params.id);

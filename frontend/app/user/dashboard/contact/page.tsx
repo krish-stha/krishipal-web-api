@@ -1,8 +1,53 @@
-import { Phone, Mail, MapPin } from "lucide-react"
-import { Header } from "@/app/user/component/header"
-import { Footer } from "@/app/user/component/footer"
+"use client";
+
+import { useEffect, useState } from "react";
+import { Phone, Mail, MapPin } from "lucide-react";
+import { Header } from "@/app/user/component/header";
+import { Footer } from "@/app/user/component/footer";
+import { getPublicSettings } from "@/lib/api/settings";
+
+type PublicSettings = {
+  storePhone?: string;
+  storeEmail?: string;
+  storeAddress?: string;
+};
 
 export default function ContactPage() {
+  const [s, setS] = useState<PublicSettings>({
+    storePhone: "",
+    storeEmail: "",
+    storeAddress: "",
+  });
+
+  useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      try {
+        const res = await getPublicSettings();
+        // your API shape: { success: true, data: {...} }
+        const data = res?.data ?? res ?? {};
+        if (!alive) return;
+
+        setS({
+          storePhone: String(data?.storePhone || ""),
+          storeEmail: String(data?.storeEmail || ""),
+          storeAddress: String(data?.storeAddress || ""),
+        });
+      } catch {
+        // keep defaults
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const phone = s.storePhone?.trim() || "+1 123 456 7890";
+  const email = s.storeEmail?.trim() || "info@krishipal.com";
+  const address = s.storeAddress?.trim() || "123 Kathmandu, Nepal, 44600";
+
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
@@ -11,9 +56,8 @@ export default function ContactPage() {
         <div className="container mx-auto px-4 py-12">
           <h1 className="text-4xl font-bold text-center mb-6">Contact Us</h1>
           <p className="text-center text-gray-600 max-w-2xl mx-auto mb-16">
-            {
-              "We're here to help! Contact us using the form below or reach out directly using the information provided."
-            }
+            We&apos;re here to help! Contact us using the form below or reach out directly using the
+            information provided.
           </p>
 
           <div className="max-w-2xl mx-auto">
@@ -26,7 +70,7 @@ export default function ContactPage() {
                     <Phone className="h-6 w-6 text-green-600" />
                   </div>
                   <div>
-                    <p className="font-medium text-gray-900">+1 123 456 7890</p>
+                    <p className="font-medium text-gray-900">{phone}</p>
                   </div>
                 </div>
 
@@ -35,7 +79,7 @@ export default function ContactPage() {
                     <Mail className="h-6 w-6 text-green-600" />
                   </div>
                   <div>
-                    <p className="font-medium text-gray-900">info@krishipal.com</p>
+                    <p className="font-medium text-gray-900">{email}</p>
                   </div>
                 </div>
 
@@ -44,7 +88,7 @@ export default function ContactPage() {
                     <MapPin className="h-6 w-6 text-green-600" />
                   </div>
                   <div>
-                    <p className="font-medium text-gray-900">123 Kathmandu, Nepal, 44600</p>
+                    <p className="font-medium text-gray-900">{address}</p>
                   </div>
                 </div>
               </div>
@@ -55,5 +99,5 @@ export default function ContactPage() {
 
       <Footer />
     </div>
-  )
+  );
 }

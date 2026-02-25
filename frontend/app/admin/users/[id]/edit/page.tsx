@@ -14,6 +14,10 @@ import {
 } from "@/lib/api/admin/user";
 import { ArrowLeft, Save, Trash2 } from "lucide-react";
 
+// ✅ ONLY UI: confirm dialog + toast (no logic change)
+import { ConfirmDialog } from "@/app/auth/components/ui/confirm-dialog";
+import { useToast } from "@/hooks/use-toast";
+
 const COOKIE_KEY = "krishipal_user";
 const USER_UPDATED_EVENT = "krishipal_user_updated";
 const BACKEND_URL =
@@ -28,6 +32,10 @@ export default function AdminUserEditPage() {
   const { id } = useParams();
   const router = useRouter();
   const { user: authUser } = useAuth();
+
+  // ✅ ONLY UI
+  const { toast } = useToast();
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const [form, setForm] = useState({
     fullName: "",
@@ -60,9 +68,17 @@ export default function AdminUserEditPage() {
           role: u.role || "user",
         });
       } catch (e: any) {
-        alert(e?.response?.data?.message || e.message || "Failed to load user");
+        const msg =
+          e?.response?.data?.message || e.message || "Failed to load user";
+        toast({
+          title: "Load failed",
+          description: msg,
+          variant: "destructive",
+          duration: 1800,
+        });
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const handleUpdate = async () => {
@@ -78,8 +94,7 @@ export default function AdminUserEditPage() {
       const res = await adminUpdateUser(id as string, fd);
 
       // Your APIs sometimes return: { success, data: {...} } OR { data: {...} }
-      const updated =
-        res?.data?.data || res?.data || null;
+      const updated = res?.data?.data || res?.data || null;
 
       // ✅ If admin updated THEIR OWN profile, refresh cookie for header
       const updatedId = updated?._id || updated?.id;
@@ -89,7 +104,10 @@ export default function AdminUserEditPage() {
         const currentRaw = Cookies.get(COOKIE_KEY);
         const current = currentRaw ? JSON.parse(currentRaw) : {};
 
-        const filename = updated?.profile_picture as string | null | undefined;
+        const filename = updated?.profile_picture as
+          | string
+          | null
+          | undefined;
         const photo = filename ? profileUrl(filename) : current?.profilePicture;
 
         Cookies.set(
@@ -112,25 +130,45 @@ export default function AdminUserEditPage() {
         window.dispatchEvent(new Event(USER_UPDATED_EVENT));
       }
 
-      alert("Updated ✅");
+      toast({
+        title: "Saved",
+        description: "Updated ✅",
+        duration: 1400,
+      });
+
       router.push("/admin/users");
     } catch (e: any) {
-      alert(e?.response?.data?.message || e.message || "Update failed");
+      const msg = e?.response?.data?.message || e.message || "Update failed";
+      toast({
+        title: "Update failed",
+        description: msg,
+        variant: "destructive",
+        duration: 1800,
+      });
     } finally {
       setLoading(false);
     }
   };
 
+  // ✅ SAME LOGIC: delete call + redirect (only UI changed)
   const handleDelete = async () => {
-    if (!confirm("Delete this user?")) return;
-
     setLoading(true);
     try {
       await adminSoftDeleteUser(id as string);
-      alert("Deleted ✅");
+      toast({
+        title: "Deleted",
+        description: "Deleted ✅",
+        duration: 1400,
+      });
       router.push("/admin/users");
     } catch (e: any) {
-      alert(e?.response?.data?.message || e.message || "Delete failed");
+      const msg = e?.response?.data?.message || e.message || "Delete failed";
+      toast({
+        title: "Delete failed",
+        description: msg,
+        variant: "destructive",
+        duration: 1800,
+      });
     } finally {
       setLoading(false);
     }
@@ -276,7 +314,7 @@ export default function AdminUserEditPage() {
           </p>
 
           <Button
-            onClick={handleDelete}
+            onClick={() => setConfirmOpen(true)}
             disabled={loading}
             variant="outline"
             className="mt-4 w-full gap-2 border-red-200 text-red-600 hover:bg-red-50"
@@ -290,6 +328,22 @@ export default function AdminUserEditPage() {
           </p>
         </div>
       </div>
+
+      {/* ✅ Confirm dialog for delete */}
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Delete this user?"
+        description="This will soft-delete the user account."
+        cancelText="Cancel"
+        confirmText={loading ? "Deleting..." : "Delete"}
+        destructive
+        loading={loading}
+        onConfirm={async () => {
+          await handleDelete();
+          setConfirmOpen(false);
+        }}
+      />
     </div>
   );
 }

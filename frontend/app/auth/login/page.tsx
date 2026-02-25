@@ -8,9 +8,12 @@ import { Button } from "@/app/auth/components/ui/button"
 import { Input } from "@/app/auth/components/ui/input"
 import { validationRules } from "@/lib/validation"
 import { useAuth } from "@/lib/contexts/auth-contexts"
+import { useRouter, useSearchParams } from "next/navigation"
 
 export default function LoginPage() {
   const { login } = useAuth()
+  const router = useRouter()
+const searchParams = useSearchParams()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
@@ -39,12 +42,26 @@ export default function LoginPage() {
     setIsLoading(true)
     try {
       await login(email, password)
+
+      const next = searchParams.get("next")
+      router.replace(next || "/")
+
       // Redirect handled in AuthContext
     } catch (err: any) {
-      setErrors({ general: err.message || "Invalid credentials. Please try again." })
-    } finally {
-      setIsLoading(false)
-    }
+  const status = err?.response?.status;
+
+  // friendly messages
+  const msg =
+    status === 401
+      ? "Email or password is incorrect."
+      : err?.response?.data?.message ||
+        err?.message ||
+        "Login failed. Please try again.";
+
+  setErrors({ general: msg });
+} finally {
+  setIsLoading(false);
+}
   }
 
   return (
@@ -78,7 +95,11 @@ export default function LoginPage() {
           </h1>
           <p className="text-gray-600 mb-8">Login to manage your account</p>
 
-          {errors.general && <p className="text-red-600 text-sm mb-4">{errors.general}</p>}
+          {errors.general && (
+  <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+    {errors.general}
+  </div>
+)}
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
@@ -108,9 +129,7 @@ export default function LoginPage() {
                 }}
                 required
               />
-              {errors.password && (
-                <p className="text-red-600 text-sm mt-2 absolute -bottom-6 left-0">{errors.password}</p>
-              )}
+              
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
@@ -119,6 +138,11 @@ export default function LoginPage() {
                 {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </button>
             </div>
+            <div className="text-right">
+  <Link href="/auth/forgot-password" className="text-green-600 hover:underline text-sm font-medium">
+    Forgot password?
+  </Link>
+</div>
 
             <Button
               type="submit"
@@ -132,11 +156,7 @@ export default function LoginPage() {
               <span className="text-gray-500">or</span>
             </div>
 
-           <div className="text-right">
-  <Link href="/auth/forgot-password" className="text-green-600 hover:underline text-sm font-medium">
-    Forgot password?
-  </Link>
-</div>
+           
 
           </form>
 

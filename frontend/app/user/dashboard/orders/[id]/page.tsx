@@ -9,10 +9,15 @@ import { cancelMyOrder, getMyOrderById } from "@/lib/api/order";
 import { initiateKhaltiPayment } from "@/lib/api/payment";
 import { endpoints } from "@/lib/api/endpoints";
 import { getToken } from "@/lib/cookie";
+import { getPublicSettings } from "@/lib/api/settings";
 
 // ✅ you already have this
 import { requestRefund, getMyRefunds } from "@/lib/api/refund";
-// if you DON'T have getMyRefunds yet, comment it and refunds UI will still work without crashing.
+
+// ✅ Professional modal
+import { NoteDialog } from "@/app/auth/components/ui/alert-dialog";
+
+type PaymentMethod = "COD" | "KHALTI" | "ESEWA";
 
 function money(n: any) {
   const v = Number(n ?? 0);
@@ -31,7 +36,8 @@ function statusLabel(s?: string) {
 
 function refundStatusBadge(status: string) {
   const s = String(status || "").toLowerCase();
-  const base = "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold border";
+  const base =
+    "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold border";
 
   if (s === "requested") return `${base} bg-amber-50 text-amber-700 border-amber-200`;
   if (s === "approved") return `${base} bg-blue-50 text-blue-700 border-blue-200`;
@@ -59,10 +65,58 @@ export default function TrackOrderPage() {
   const [error, setError] = useState("");
   const [order, setOrder] = useState<any>(null);
 
-  // ✅ NEW: refunds state
+  // ✅ refunds state
   const [refunds, setRefunds] = useState<any[]>([]);
 
-  const [paymentChoice, setPaymentChoice] = useState<"COD" | "KHALTI" | "ESEWA">("COD");
+  // ✅ settings-driven payments
+  const [settings, setSettings] = useState<any>(null);
+  const [payments, setPayments] = useState<{
+    COD: boolean;
+    KHALTI: boolean;
+    ESEWA: boolean;
+  }>({
+    COD: true,
+    KHALTI: true,
+    ESEWA: true,
+  });
+
+  const [paymentChoice, setPaymentChoice] = useState<PaymentMethod>("COD");
+
+  // ✅ Cancel dialog state
+  const [cancelOpen, setCancelOpen] = useState(false);
+
+  // ✅ Refund dialog state (NEW)
+  const [refundOpen, setRefundOpen] = useState(false);
+
+  const fetchSettings = async () => {
+    try {
+      const res = await getPublicSettings();
+      const s = res?.data || null;
+      setSettings(s);
+
+      const p = s?.payments || {};
+      const normalized = {
+        COD: !!p.COD,
+        KHALTI: !!p.KHALTI,
+        ESEWA: !!p.ESEWA,
+      };
+
+      setPayments(normalized);
+
+      const firstEnabled: PaymentMethod | null = normalized.COD
+        ? "COD"
+        : normalized.KHALTI
+        ? "KHALTI"
+        : normalized.ESEWA
+        ? "ESEWA"
+        : null;
+
+      if (firstEnabled) setPaymentChoice(firstEnabled);
+    } catch {
+      setSettings(null);
+      setPayments({ COD: true, KHALTI: true, ESEWA: true });
+    }
+  };
 
   const fetchOrder = async () => {
     if (!isValidObjectId(id)) {
@@ -83,16 +137,13 @@ export default function TrackOrderPage() {
     }
   };
 
-  // ✅ NEW: fetch refunds (safe)
   const fetchRefunds = async () => {
     try {
-      // If you don't have this endpoint yet, this will throw.
       const res = await getMyRefunds();
       const all = res?.data || [];
       const list = all.filter((r: any) => String(r.order) === String(id));
       setRefunds(list);
     } catch {
-      // silently ignore (no endpoint yet)
       setRefunds([]);
     }
   };
@@ -101,11 +152,11 @@ export default function TrackOrderPage() {
     if (id) {
       fetchOrder();
       fetchRefunds();
+      fetchSettings();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // show a tiny message after redirect
   useEffect(() => {
     const paid = sp.get("paid");
     if (paid === "1") setError("");
@@ -115,7 +166,10 @@ export default function TrackOrderPage() {
 
   const subtotal = useMemo(() => Number(order?.subtotal || 0), [order]);
   const shipping = useMemo(() => Number(order?.shippingFee || 0), [order]);
-  const total = useMemo(() => Number(order?.total || subtotal + shipping), [order, subtotal, shipping]);
+  const total = useMemo(
+    () => Number(order?.total || subtotal + shipping),
+    [order, subtotal, shipping]
+  );
 
   const currentStatus = String(order?.status || "").toLowerCase();
   const paymentStatus = String(order?.paymentStatus || "unpaid").toLowerCase();
@@ -126,28 +180,33 @@ export default function TrackOrderPage() {
 
   const canCancel = currentStatus === "pending" && paymentStatus !== "paid";
   const canPay =
-  ["pending", "confirmed", "shipped"].includes(currentStatus) &&
-  paymentStatus !== "paid";
+    ["pending", "confirmed", "shipped"].includes(currentStatus) &&
+    paymentStatus !== "paid";
 
-
-  // ✅ refund only if paid + pending/confirmed
-  const canRequestRefund = paymentStatus === "paid" && (currentStatus === "pending" || currentStatus === "confirmed");
+  const canRequestRefund =
+    paymentStatus === "paid" &&
+    (currentStatus === "pending" || currentStatus === "confirmed");
 
   const goBackSmart = () => {
     router.push("/user/dashboard/shop");
   };
 
-  const onCancel = async () => {
+  // ✅ Cancel modal open
+  const onCancelClick = () => {
     if (!canCancel) return;
+    setCancelOpen(true);
+  };
 
-    const reason = (prompt("Cancel reason (optional):") || "").trim();
-    if (!confirm("Cancel this order?")) return;
+  // ✅ Cancel action
+  const doCancel = async (reason: string) => {
+    if (!canCancel) return;
 
     setLoading(true);
     setError("");
     try {
-      const res = await cancelMyOrder(id, reason);
+      const res = await cancelMyOrder(id, (reason || "").trim());
       setOrder(res?.data || null);
+      setCancelOpen(false);
     } catch (e: any) {
       setError(e?.response?.data?.message || e?.message || "Failed to cancel order");
     } finally {
@@ -183,70 +242,87 @@ export default function TrackOrderPage() {
   };
 
   const onPay = async () => {
-  setError("");
+    setError("");
 
-  if (paymentChoice === "KHALTI") {
-    setLoading(true);
-    try {
-      const res = await initiateKhaltiPayment(id);
-      const paymentUrl = res?.data?.payment_url;
-      if (!paymentUrl) throw new Error("No payment_url received");
-      window.location.href = paymentUrl;
-    } catch (e: any) {
-      setError(e?.response?.data?.message || e?.message || "Failed to initiate Khalti");
-    } finally {
-      setLoading(false);
+    if (
+      (paymentChoice === "COD" && !payments.COD) ||
+      (paymentChoice === "KHALTI" && !payments.KHALTI) ||
+      (paymentChoice === "ESEWA" && !payments.ESEWA)
+    ) {
+      setError("Selected payment method is disabled.");
+      return;
     }
-    return;
-  }
 
-  if (paymentChoice === "ESEWA") {
-    router.push(`/payments/esewa/redirect?orderId=${id}`);
-    return;
-  }
+    if (paymentChoice === "KHALTI") {
+      setLoading(true);
+      try {
+        const res = await initiateKhaltiPayment(id);
+        const paymentUrl = res?.data?.payment_url;
+        if (!paymentUrl) throw new Error("No payment_url received");
+        window.location.href = paymentUrl;
+      } catch (e: any) {
+        setError(e?.response?.data?.message || e?.message || "Failed to initiate Khalti");
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
 
-  setError("Pay Now is only for Khalti/eSewa payments.");
-};
+    if (paymentChoice === "ESEWA") {
+      router.push(`/payments/esewa/redirect?orderId=${id}`);
+      return;
+    }
 
+    setError("Pay Now is only for Khalti/eSewa payments.");
+  };
 
-  // ✅ FIX: Single prompt only (no double OK)
-  // User types: "amount | reason"
-  // example: "200 | wrong amount charged"
-  const onRequestRefund = async () => {
+  // ✅ Refund modal open (NEW)
+  const onRefundClick = () => {
     if (!canRequestRefund || refundLoading) return;
+    setRefundOpen(true);
+  };
+
+  // ✅ Refund action using modal note text: "amount | reason"
+  // Example: "200 | wrong amount charged"
+  const doRefund = async (note: string) => {
+    if (!canRequestRefund || refundLoading) return;
+
+    const max = Number(order?.total || 0);
+
+    const raw = String(note || "").trim();
+    if (!raw) {
+      setError("Please enter refund amount.");
+      return;
+    }
+
+    const parts = raw.split("|");
+    const amountStr = String(parts[0] || "").trim();
+    const reason = String(parts[1] || "").trim();
+
+    const amount = Number(amountStr);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setError("Invalid refund amount");
+      return;
+    }
+    if (amount > max) {
+      setError(`Refund amount exceeds max Rs. ${max}`);
+      return;
+    }
 
     try {
       setError("");
       setRefundLoading(true);
 
-      const max = Number(order?.total || 0);
+      const res = await requestRefund({
+        orderId: id,
+        amount,
+        reason: reason || undefined,
+      });
 
-      const raw = prompt(
-        `Refund request format:\namount | reason(optional)\n\nExample:\n200 | Wrong amount charged\n\nMax: ${max} Rs`
-      );
-      if (!raw) return;
-
-      const parts = raw.split("|");
-      const amountStr = String(parts[0] || "").trim();
-      const reason = String(parts[1] || "").trim();
-
-      const amount = Number(amountStr);
-      if (!Number.isFinite(amount) || amount <= 0) {
-        setError("Invalid refund amount");
-        return;
-      }
-      if (amount > max) {
-        setError(`Refund amount exceeds max Rs. ${max}`);
-        return;
-      }
-
-      const res = await requestRefund({ orderId: id, amount, reason: reason || undefined });
-
-      // ✅ optimistic add
       const created = res?.data || res;
       if (created) setRefunds((prev) => [created, ...prev]);
 
-      // ✅ refresh (if endpoint exists)
+      setRefundOpen(false);
       await fetchRefunds();
     } catch (e: any) {
       setError(e?.response?.data?.message || e?.message || "Refund request failed");
@@ -255,13 +331,46 @@ export default function TrackOrderPage() {
     }
   };
 
+  const showPayNow =
+    canPay &&
+    ((paymentChoice === "KHALTI" && payments.KHALTI) ||
+      (paymentChoice === "ESEWA" && payments.ESEWA));
+
   return (
     <div className="p-6">
+      {/* ✅ Cancel modal */}
+      <NoteDialog
+        open={cancelOpen}
+        onOpenChange={setCancelOpen}
+        title="Cancel this order?"
+        description="Tell us the reason (optional). This action cannot be undone."
+        label="Cancel reason (optional)"
+        placeholder="Example: Ordered by mistake"
+        confirmText="Yes, cancel"
+        cancelText="No"
+        destructive
+        loading={loading}
+        onConfirm={doCancel}
+      />
+
+      {/* ✅ Refund modal (NEW) */}
+      <NoteDialog
+        open={refundOpen}
+        onOpenChange={setRefundOpen}
+        title="Request a refund"
+        description="Enter Refund Amount"
+        label="Refund amount"
+        placeholder="Example: 200"
+        confirmText="Submit refund"
+        cancelText="Cancel"
+        loading={refundLoading}
+        onConfirm={doRefund}
+      />
+
       <div className="mb-6 flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm text-slate-500">Account / Orders / {id}</div>
           <h1 className="text-2xl font-bold text-slate-900">Track Order</h1>
-          <p className="text-slate-600 mt-1">Order status + items snapshot.</p>
+          <p className="text-slate-600 mt-1"></p>
         </div>
 
         <div className="flex gap-2">
@@ -269,22 +378,26 @@ export default function TrackOrderPage() {
             Back
           </Button>
 
-          
-        {canPay && (paymentChoice === "KHALTI" || paymentChoice === "ESEWA") && (
-          <Button
-            className={paymentChoice === "KHALTI"
-              ? "bg-purple-600 hover:bg-purple-700 text-white"
-              : "bg-green-600 hover:bg-green-700 text-white"}
-            onClick={onPay}
-            disabled={loading}
-          >
-            {loading ? "Processing..." : `Pay Now (${paymentChoice})`}
-          </Button>
-        )}
-
+          {showPayNow && (
+            <Button
+              className={
+                paymentChoice === "KHALTI"
+                  ? "bg-purple-600 hover:bg-purple-700 text-white"
+                  : "bg-green-600 hover:bg-green-700 text-white"
+              }
+              onClick={onPay}
+              disabled={loading}
+            >
+              {loading ? "Processing..." : `Pay Now `}
+            </Button>
+          )}
 
           {canCancel && (
-            <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={onCancel} disabled={loading}>
+            <Button
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={onCancelClick}
+              disabled={loading}
+            >
               {loading ? "Cancelling..." : "Cancel Order"}
             </Button>
           )}
@@ -401,7 +514,11 @@ export default function TrackOrderPage() {
 
             {paymentStatus === "paid" && (
               <div className="mt-2 space-y-3">
-                <Button variant="outline" className="border-slate-300 w-full" onClick={onDownloadInvoice}>
+                <Button
+                  variant="outline"
+                  className="border-slate-300 w-full"
+                  onClick={onDownloadInvoice}
+                >
                   Download Invoice (PDF)
                 </Button>
 
@@ -409,14 +526,13 @@ export default function TrackOrderPage() {
                   <Button
                     variant="outline"
                     className="border-slate-300 w-full"
-                    onClick={onRequestRefund}
+                    onClick={onRefundClick} // ✅ modal instead of prompt
                     disabled={refundLoading}
                   >
                     {refundLoading ? "Submitting..." : "Request Refund"}
                   </Button>
                 )}
 
-                {/* ✅ Refund status list */}
                 {refunds.length > 0 && (
                   <div className="rounded-xl border bg-slate-50 p-3">
                     <div className="font-semibold text-slate-900 text-sm mb-2">Refund Requests</div>
@@ -426,7 +542,9 @@ export default function TrackOrderPage() {
                           <div className="text-sm text-slate-700">
                             Rs. {Math.floor(Number(r.amountPaisa || 0) / 100)}
                           </div>
-                          <span className={refundStatusBadge(String(r.status))}>{String(r.status).toUpperCase()}</span>
+                          <span className={refundStatusBadge(String(r.status))}>
+                            {String(r.status).toUpperCase()}
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -453,30 +571,43 @@ export default function TrackOrderPage() {
             {canPay && (
               <div className="mt-4">
                 <div className="text-sm font-semibold text-slate-900">Payment Method</div>
-                <div className="mt-2 flex gap-3 text-sm">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="pay"
-                      checked={paymentChoice === "COD"}
-                      onChange={() => setPaymentChoice("COD")}
-                    />
-                    COD
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="pay"
-                      checked={paymentChoice === "KHALTI"}
-                      onChange={() => setPaymentChoice("KHALTI")}
-                    />
-                    Khalti
-                  </label>
 
-                  <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="radio" name="pay" checked={paymentChoice === "ESEWA"} onChange={() => setPaymentChoice("ESEWA")} />
-                   eSewa
-                  </label>
+                <div className="mt-2 flex flex-wrap gap-4 text-sm">
+                  {payments.COD && (
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="pay"
+                        checked={paymentChoice === "COD"}
+                        onChange={() => setPaymentChoice("COD")}
+                      />
+                      COD
+                    </label>
+                  )}
+
+                  {payments.KHALTI && (
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="pay"
+                        checked={paymentChoice === "KHALTI"}
+                        onChange={() => setPaymentChoice("KHALTI")}
+                      />
+                      Khalti
+                    </label>
+                  )}
+
+                  {payments.ESEWA && (
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="pay"
+                        checked={paymentChoice === "ESEWA"}
+                        onChange={() => setPaymentChoice("ESEWA")}
+                      />
+                      eSewa
+                    </label>
+                  )}
                 </div>
               </div>
             )}

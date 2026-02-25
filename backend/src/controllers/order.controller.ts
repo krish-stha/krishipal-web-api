@@ -10,6 +10,9 @@ import path from "path";
 import fs from "fs";
 import { generateInvoicePdfBuffer } from "../services/invoice.service";
 import { UserModel } from "../models/user.model"; // only if you want customer name/email on invoice
+import { SettingsService } from "../services/settings.service";
+import { getCompanyFromSettings } from "../services/company.service";
+
 
 
 
@@ -31,23 +34,51 @@ function computeSubtotalFromCart(cart: any) {
 export class OrderController {
   // POST /api/orders
   // body: { address?: string, paymentMethod?: "COD" }
+
+  
   async createFromCart(req: AuthRequest, res: Response) {
     const userId = mustUserId(req);
 
-    const address = String(req.body?.address ?? "").trim();
-    const paymentMethod = String(req.body?.paymentMethod ?? "COD").trim();
+    const { address, paymentMethod, selectedProductIds } = req.body as {
+    address?: string;
+    paymentMethod?: string;
+    selectedProductIds?: string[];
+  };
+    
 
-    if (!address) throw new HttpError(400, "Address is required");
-    if (paymentMethod !== "COD") throw new HttpError(400, "Only COD supported for now");
+    const addr = String(address ?? "").trim();
+    const pay = String(paymentMethod ?? "COD").trim().toUpperCase();
 
+    if (!addr) throw new HttpError(400, "Address is required");
+
+    if (!["COD", "KHALTI", "ESEWA"].includes(pay)) {
+      throw new HttpError(400, "Invalid paymentMethod");
+    }
+       
+    const settingsService = new SettingsService();
+    
     // 1) load cart (NO heavy populate; we only need ids + qty + snapshot)
     const cart = await CartModel.findOne({ user: userId }).lean();
     if (!cart || !cart.items || cart.items.length === 0) {
       throw new HttpError(400, "Cart is empty");
     }
 
+    // ✅ If selectedProductIds provided, order only those cart items
+// ✅ If selectedProductIds provided, order only those cart items
+let cartItems: any[] = Array.isArray((cart as any)?.items) ? (cart as any).items : [];
+
+if (Array.isArray(selectedProductIds) && selectedProductIds.length > 0) {
+  const selectedSet = new Set(selectedProductIds.map(String));
+
+  cartItems = cartItems.filter((it: any) => selectedSet.has(String(it.product)));
+
+  if (cartItems.length === 0) {
+    throw new HttpError(400, "No selected items found in cart");
+  }
+}
+
     // 2) validate products in bulk
-    const productIds = cart.items.map((it: any) => it.product).filter(Boolean);
+    const productIds = cartItems.map((it: any) => it.product).filter(Boolean);
     const products = await ProductModel.find({
       _id: { $in: productIds },
       deleted_at: null,
@@ -60,7 +91,7 @@ export class OrderController {
     for (const p of products) byId.set(String(p._id), p);
 
     // validate stock + build snapshot items
-    const orderItems = cart.items.map((it: any) => {
+    const orderItems = cartItems.map((it: any) => {
       const pid = String(it.product);
       const p = byId.get(pid);
 
@@ -97,150 +128,193 @@ export class OrderController {
     });
 
     const subtotal = computeSubtotalFromCart({ items: orderItems });
-    const shippingFee = 0; // ✅ for now
+    const settings = await settingsService.getOrCreate();
+
+// ✅ enforce enabled payments
+    const enabled = settings?.payments || { COD: true, KHALTI: true, ESEWA: true };
+    if (pay === "COD" && !enabled.COD) throw new HttpError(400, "COD is disabled");
+    if (pay === "KHALTI" && !enabled.KHALTI) throw new HttpError(400, "Khalti is disabled");
+    if (pay === "ESEWA" && !enabled.ESEWA) throw new HttpError(400, "eSewa is disabled");
+
+    // ✅ shipping fee rules
+    const shippingFeeDefault = Number(settings?.shippingFeeDefault ?? 0);
+    const freeShippingThreshold =
+      settings?.freeShippingThreshold === null || settings?.freeShippingThreshold === undefined
+        ? null
+        : Number(settings.freeShippingThreshold);
+
+    let shippingFee = Math.max(0, shippingFeeDefault);
+
+    if (freeShippingThreshold !== null && Number.isFinite(freeShippingThreshold)) {
+      if (subtotal >= freeShippingThreshold) shippingFee = 0;
+    }
+
     const total = subtotal + shippingFee;
 
     // 3) Reduce stock + create order + clear cart
     // Prefer transaction if Mongo supports it; fallback if not.
-    const session = await mongoose.startSession();
+    // ... you already built: orderItems, subtotal, shippingFee, total
 
-    try {
-      session.startTransaction();
+const session = await mongoose.startSession();
 
-      // decrement stock for each product
-      for (const it of orderItems) {
-        const ok = await ProductModel.updateOne(
-          { _id: it.product, deleted_at: null, status: "active", stock: { $gte: it.qty } },
-          { $inc: { stock: -it.qty } },
-          { session }
-        );
+try {
+  session.startTransaction();
 
-        if (ok.modifiedCount !== 1) {
-          throw new HttpError(400, `Stock changed for ${it.name}, try again`);
-        }
-      }
+  // ✅ 1) DECREASE STOCK (atomic per item)
+  for (const it of orderItems) {
+    const r = await ProductModel.updateOne(
+      { _id: it.product, deleted_at: null, stock: { $gte: it.qty } },
+      { $inc: { stock: -it.qty } },
+      { session }
+    );
 
-      const created = await OrderModel.create(
-        [
-          {
-            user: new mongoose.Types.ObjectId(userId),
-            items: orderItems,
-            subtotal,
-            shippingFee,
-            total,
-            status: "pending",
-            address,
-            paymentMethod: "COD",
-          },
-        ],
-        { session }
-      );
-
-      // clear cart
-      await CartModel.updateOne({ user: userId }, { $set: { items: [] } }, { session });
-
-      await session.commitTransaction();
-
-      return res.status(201).json({
-        success: true,
-        data: created[0],
-      });
-    } catch (err: any) {
-      try {
-        await session.abortTransaction();
-      } catch {}
-
-      // Fallback if transactions not supported (single-node without replica set)
-      // We do a safe sequential approach:
-      // - re-check stock with conditional updates
-      // - if any fail, stop and tell user
-      // NOTE: This is best-effort without true atomicity.
-      if (String(err?.message || "").includes("Transaction numbers are only allowed")) {
-        for (const it of orderItems) {
-          const ok = await ProductModel.updateOne(
-            { _id: it.product, deleted_at: null, status: "active", stock: { $gte: it.qty } },
-            { $inc: { stock: -it.qty } }
-          );
-          if (ok.modifiedCount !== 1) {
-            throw new HttpError(400, `Stock changed for ${it.name}, try again`);
-          }
-        }
-
-        const created = await OrderModel.create({
-          user: new mongoose.Types.ObjectId(userId),
-          items: orderItems,
-          subtotal,
-          shippingFee,
-          total,
-          status: "pending",
-          address,
-          paymentMethod: "COD",
-        });
-
-        await CartModel.updateOne({ user: userId }, { $set: { items: [] } });
-
-        return res.status(201).json({ success: true, data: created });
-      }
-
-      throw err;
-    } finally {
-      session.endSession();
+    // if nothing updated => not enough stock (someone else bought it)
+    if (r.modifiedCount === 0) {
+      throw new HttpError(400, `Insufficient stock for ${it.name}`);
     }
   }
 
-  async downloadMyInvoice(req: AuthRequest, res: Response) {
-  const userId = mustUserId(req);
-  const { id } = req.params;
+  // ✅ 2) CREATE ORDER
+  const created = await OrderModel.create(
+    [
+      {
+        user: new mongoose.Types.ObjectId(userId),
+        items: orderItems,
+        subtotal,
+        shippingFee,
+        total,
+        status: "pending",
+        address: addr,
+        paymentMethod: pay as any,
+        paymentGateway: pay as any,
+      },
+    ],
+    { session }
+  );
 
-  if (!mongoose.Types.ObjectId.isValid(id)) throw new HttpError(400, "Invalid order id");
+  // ✅ 3) CLEAR CART
+  if (Array.isArray(selectedProductIds) && selectedProductIds.length > 0) {
+  await CartModel.updateOne(
+    { user: userId },
+    { $pull: { items: { product: { $in: selectedProductIds.map((id) => new mongoose.Types.ObjectId(id)) } } } },
+    { session }
+  );
+} else {
+  // normal checkout => clear cart
+  await CartModel.updateOne({ user: userId }, { $set: { items: [] } }, { session });
+}
 
-  const order = await OrderModel.findOne({ _id: id, user: userId, deleted_at: null }).lean();
-  if (!order) throw new HttpError(404, "Order not found");
+  await session.commitTransaction();
 
-  // ✅ allow invoice only for paid orders
-  if (String(order.paymentStatus || "").toLowerCase() !== "paid") {
-    throw new HttpError(400, "Invoice available only after payment");
+  return res.status(201).json({ success: true, data: created[0] });
+} catch (err: any) {
+  try {
+    await session.abortTransaction();
+  } catch {}
+
+  // ✅ FALLBACK (if your MongoDB doesn't support transactions)
+  if (String(err?.message || "").includes("Transaction numbers are only allowed")) {
+
+    // ✅ decrease stock WITHOUT session
+    for (const it of orderItems) {
+      const r = await ProductModel.updateOne(
+        { _id: it.product, deleted_at: null, stock: { $gte: it.qty } },
+        { $inc: { stock: -it.qty } }
+      );
+      if (r.modifiedCount === 0) throw new HttpError(400, `Insufficient stock for ${it.name}`);
+    }
+
+    // ✅ create order
+    const created = await OrderModel.create({
+      user: new mongoose.Types.ObjectId(userId),
+      items: orderItems,
+      subtotal,
+      shippingFee,
+      total,
+      status: "pending",
+      address: addr,
+      paymentMethod: pay as any,
+      paymentGateway: pay as any,
+    });
+
+    // ✅ clear cart
+    if (Array.isArray(selectedProductIds) && selectedProductIds.length > 0) {
+  await CartModel.updateOne(
+    { user: userId },
+    {
+      $pull: {
+        items: {
+          product: { $in: selectedProductIds.map((id) => new mongoose.Types.ObjectId(id)) },
+        },
+      },
+    }
+  );
+} else {
+  await CartModel.updateOne({ user: userId }, { $set: { items: [] } });
+}
+
+    return res.status(201).json({ success: true, data: created });
   }
 
-  // ✅ Fetch user directly (reliable)
-  const user = await UserModel.findById(userId).select("fullName email countryCode phone").lean();
-
-  const countryCode = String((user as any)?.countryCode || "").trim();
-  const phoneOnly = String((user as any)?.phone || "").trim();
-
-  // ✅ Build phone nicely
-  const customerPhone =
-    phoneOnly
-      ? `${countryCode}${countryCode && !countryCode.endsWith("-") && !countryCode.endsWith(" ") ? "" : ""}${phoneOnly}`
-      : "-";
-
-  const COMPANY_NAME = process.env.COMPANY_NAME || "KrishiPal";
-  const COMPANY_ADDRESS = process.env.COMPANY_ADDRESS || "Kathmandu, Nepal";
-
-  const logoPath = path.resolve(process.cwd(), "public", "logo.png");
-  const safeLogoPath = fs.existsSync(logoPath) ? logoPath : undefined;
-
-  const pdf = await generateInvoicePdfBuffer({
-    order,
-    company: { name: COMPANY_NAME, address: COMPANY_ADDRESS },
-    logoPath: safeLogoPath,
-    customer: {
-      name: (user as any)?.fullName || "-",
-      email: (user as any)?.email || "-",
-      phone: customerPhone,
-    },
-  });
-
-  // ✅ Avoid browser caching old PDF
-  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-  res.setHeader("Pragma", "no-cache");
-  res.setHeader("Expires", "0");
-
-  res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `inline; filename="invoice-${String(order._id).slice(-8)}.pdf"`);
-
-  return res.status(200).send(pdf);
+  throw err;
+} finally {
+  session.endSession();
 }
+  }
+
+//   async downloadMyInvoice(req: AuthRequest, res: Response) {
+//   const userId = mustUserId(req);
+//   const { id } = req.params;
+
+//   if (!mongoose.Types.ObjectId.isValid(id)) throw new HttpError(400, "Invalid order id");
+
+//   const order = await OrderModel.findOne({ _id: id, user: userId, deleted_at: null }).lean();
+//   if (!order) throw new HttpError(404, "Order not found");
+
+//   // ✅ allow invoice only for paid orders
+//   if (String(order.paymentStatus || "").toLowerCase() !== "paid") {
+//     throw new HttpError(400, "Invoice available only after payment");
+//   }
+
+//   // ✅ Fetch user directly (reliable)
+//   const user = await UserModel.findById(userId).select("fullName email countryCode phone").lean();
+
+//   const countryCode = String((user as any)?.countryCode || "").trim();
+//   const phoneOnly = String((user as any)?.phone || "").trim();
+
+//   // ✅ Build phone nicely
+//   const customerPhone =
+//     phoneOnly
+//       ? `${countryCode}${countryCode && !countryCode.endsWith("-") && !countryCode.endsWith(" ") ? "" : ""}${phoneOnly}`
+//       : "-";
+
+//   const COMPANY_NAME = process.env.COMPANY_NAME || "KrishiPal";
+//   const COMPANY_ADDRESS = process.env.COMPANY_ADDRESS || "Kathmandu, Nepal";
+
+//   const logoPath = path.resolve(process.cwd(), "public", "logo.png");
+//   const safeLogoPath = fs.existsSync(logoPath) ? logoPath : undefined;
+
+//   const pdf = await generateInvoicePdfBuffer({
+//     order,
+//     company: { name: COMPANY_NAME, address: COMPANY_ADDRESS },
+//     logoPath: safeLogoPath,
+//     customer: {
+//       name: (user as any)?.fullName || "-",
+//       email: (user as any)?.email || "-",
+//       phone: customerPhone,
+//     },
+//   });
+
+//   // ✅ Avoid browser caching old PDF
+//   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+//   res.setHeader("Pragma", "no-cache");
+//   res.setHeader("Expires", "0");
+
+//   res.setHeader("Content-Type", "application/pdf");
+//   res.setHeader("Content-Disposition", `inline; filename="invoice-${String(order._id).slice(-8)}.pdf"`);
+
+//   return res.status(200).send(pdf);
+// }
 
 
 
@@ -265,25 +339,30 @@ async downloadInvoice(req: AuthRequest, res: Response) {
   const ph = String((user as any)?.phone || "").trim();
   const customerPhone = ph ? `${cc}${ph}` : "-";
 
-  const COMPANY_NAME = process.env.COMPANY_NAME || "KrishiPal";
-  const COMPANY_ADDRESS = process.env.COMPANY_ADDRESS || "Kathmandu, Nepal";
 
-  const logoPath = path.resolve(process.cwd(), "public", "logo.png");
-  const safeLogoPath = fs.existsSync(logoPath) ? logoPath : undefined;
+
+  const company = await getCompanyFromSettings();
+  const safeLogoPath = fs.existsSync(company.logoPath) ? company.logoPath : undefined;
+
 
   console.log("USER PHONE:", user?.countryCode, user?.phone);
 
 
   const pdf = await generateInvoicePdfBuffer({
-    order,
-    company: { name: COMPANY_NAME, address: COMPANY_ADDRESS },
-    logoPath: safeLogoPath,
-    customer: {
-      name: (user as any)?.fullName || "-",
-      email: (user as any)?.email || "-",
-      phone: customerPhone,
-    },
-  });
+  order,
+  company: {
+    name: company.name,
+    address: company.address,
+    email: company.email,
+    phone: company.phone,
+  },
+  logoPath: safeLogoPath,
+  customer: {
+    name: (user as any)?.fullName || "-",
+    email: (user as any)?.email || "-",
+    phone: customerPhone,
+  },
+});
 
   // ✅ prevent cached old PDF
   res.setHeader("Cache-Control", "no-store");
@@ -371,16 +450,7 @@ async cancelMyOrder(req: AuthRequest, res: Response) {
     }
 
     // restore stock
-    for (const it of order.items || []) {
-      const qty = Number((it as any).qty || 0);
-      if (qty > 0) {
-        await ProductModel.updateOne(
-          { _id: (it as any).product, deleted_at: null },
-          { $inc: { stock: qty } },
-          { session }
-        );
-      }
-    }
+   
 
     // update order fields
     order.status = "cancelled";
@@ -399,7 +469,7 @@ async cancelMyOrder(req: AuthRequest, res: Response) {
     } catch {}
 
     // ✅ fallback if transactions not supported
-    if (String(err?.message || "").includes("Transaction numbers are only allowed")) {
+    if (String(err?.message || "").toLowerCase().includes("transaction")) {
       const order = await OrderModel.findOne({ _id: id, user: userId, deleted_at: null });
       if (!order) throw new HttpError(404, "Order not found");
 

@@ -1,15 +1,208 @@
-// app/admin/dashboard/page.tsx
-export default function AdminDashboardPage() {
-  return (
-    <div>
-      <div className="text-sm text-slate-500">Admin / Dashboard</div>
-      <h1 className="mt-2 text-2xl font-semibold text-slate-900">Dashboard</h1>
-      <p className="mt-1 text-sm text-slate-500">
-        Coming soon. This will show sales, orders, revenue, and charts.
-      </p>
+"use client";
 
-      <div className="mt-6 rounded-2xl border bg-slate-50 p-6 text-slate-600">
-        Placeholder dashboard area.
+import { useEffect, useState } from "react";
+import { adminDashboardSummary } from "@/lib/api/admin/dashboard";
+import { Card, CardContent } from "@/app/auth/components/ui/card";
+import { Button } from "@/app/auth/components/ui/button";
+import { StatCard } from "../components/StatCard";
+import { RevenueChart } from "../components/RevenueChart";
+import { RecentUsers } from "../components/RecentUsers";
+import { RecentOrders } from "../components/RecentOrders";
+
+function ymd(d: Date) {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+type GroupBy = "day" | "month";
+
+export default function AdminDashboardPage() {
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+  const [data, setData] = useState<any>(null);
+
+  const [from, setFrom] = useState<string>("");
+  const [to, setTo] = useState<string>("");
+
+  // ✅ UPDATED: load params include groupBy
+  const load = async (params?: {
+    months?: number;
+    from?: string;
+    to?: string;
+    groupBy?: GroupBy;
+  }) => {
+    try {
+      setLoading(true);
+      const res = await adminDashboardSummary(params);
+      // your API returns { success, data }
+      setData(res?.data);
+      setErr(null);
+    } catch (e: any) {
+      setErr(e?.response?.data?.message || e?.message || "Failed to load dashboard");
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // default = last 30 days
+  useEffect(() => {
+    const now = new Date();
+    const d = new Date();
+    d.setDate(now.getDate() - 29);
+
+    const f = ymd(d);
+    const t = ymd(now);
+
+    setFrom(f);
+    setTo(t);
+
+    // ✅ IMPORTANT: send groupBy=day because from/to exists
+    load({ months: 6, from: f, to: t, groupBy: "day" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const apply = () => {
+    if (from && to && from > to) {
+      setErr("From date cannot be after To date");
+      return;
+    }
+    setErr(null);
+
+    load({
+      months: 6,
+      from: from || undefined,
+      to: to || undefined,
+      groupBy: from && to ? "day" : "month",
+    });
+  };
+
+  const clear = () => {
+    setFrom("");
+    setTo("");
+    setErr(null);
+
+    load({ months: 6, groupBy: "month" });
+  };
+
+  const quickToday = () => {
+    const t = ymd(new Date());
+    setFrom(t);
+    setTo(t);
+    setErr(null);
+
+    load({ months: 6, from: t, to: t, groupBy: "day" });
+  };
+
+  const quick7d = () => {
+    const now = new Date();
+    const d = new Date();
+    d.setDate(now.getDate() - 6);
+
+    const f = ymd(d);
+    const t = ymd(now);
+
+    setFrom(f);
+    setTo(t);
+    setErr(null);
+
+    load({ months: 6, from: f, to: t, groupBy: "day" });
+  };
+
+  const quick30d = () => {
+    const now = new Date();
+    const d = new Date();
+    d.setDate(now.getDate() - 29);
+
+    const f = ymd(d);
+    const t = ymd(now);
+
+    setFrom(f);
+    setTo(t);
+    setErr(null);
+
+    load({ months: 6, from: f, to: t, groupBy: "day" });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div className="text-2xl font-semibold text-slate-900">Dashboard</div>
+          <div className="text-sm text-slate-500 mt-1">Store overview and recent activity.</div>
+        </div>
+
+        <div className="flex flex-wrap items-end gap-2">
+          <Button variant="outline" className="border-slate-300" onClick={quickToday} disabled={loading}>
+            Today
+          </Button>
+          <Button variant="outline" className="border-slate-300" onClick={quick7d} disabled={loading}>
+            Last 7D
+          </Button>
+          <Button variant="outline" className="border-slate-300" onClick={quick30d} disabled={loading}>
+            Last 30D
+          </Button>
+
+          <div className="w-px h-9 bg-slate-200 mx-1" />
+
+          <div className="flex flex-col">
+            <div className="text-xs text-slate-600 mb-1">From</div>
+            <input
+              type="date"
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:ring-4 focus:ring-emerald-100 focus:border-emerald-300"
+            />
+          </div>
+
+          <div className="flex flex-col">
+            <div className="text-xs text-slate-600 mb-1">To</div>
+            <input
+              type="date"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:ring-4 focus:ring-emerald-100 focus:border-emerald-300"
+            />
+          </div>
+
+          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={apply} disabled={loading}>
+            Apply
+          </Button>
+          <Button variant="outline" className="border-slate-300" onClick={clear} disabled={loading}>
+            Clear
+          </Button>
+        </div>
+      </div>
+
+      {err && (
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="py-4 text-sm text-red-700">{err}</CardContent>
+        </Card>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <StatCard title="Total Users" value={loading ? "..." : data?.totals?.users ?? 0} />
+        <StatCard title="Products" value={loading ? "..." : data?.totals?.products ?? 0} />
+        <StatCard title="Blogs" value={loading ? "..." : data?.totals?.blogs ?? 0} />
+        <StatCard title="Total Orders" value={loading ? "..." : data?.totals?.orders ?? 0} />
+        <StatCard title="Paid Orders" value={loading ? "..." : data?.totals?.paidOrders ?? 0} />
+        <StatCard title="Total Revenue" value={loading ? "..." : `Rs. ${data?.totals?.revenue ?? 0}`} />
+      </div>
+
+      {/* ✅ Chart */}
+      <RevenueChart
+        loading={loading}
+        rows={data?.revenueTrend ?? []}
+        from={from}
+        to={to}
+        chartType={data?.filters?.chartType ?? (from && to ? "day" : "month")}
+      />
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <RecentOrders loading={loading} rows={data?.recentOrders ?? []} />
+        <RecentUsers loading={loading} rows={data?.recentUsers ?? []} />
       </div>
     </div>
   );

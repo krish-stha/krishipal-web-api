@@ -4,15 +4,19 @@ import { CategoryModel } from "../models/category.model";
 import { ProductModel } from "../models/product.model";
 import { toSlug } from "../utils/slug";
 import type { SortOrder } from "mongoose";
+import mongoose from "mongoose";
+import { InventoryService } from "../services/inventory.service"; // adjust path if different
 
 const repo = new ProductRepository();
+const inventory = new InventoryService();
+
 
 function normalizeSku(sku: string) {
   return sku.trim().toUpperCase();
 }
 
 export class ProductService {
-  async create(payload: any, imageFiles: Express.Multer.File[]) {
+ async create(payload: any, imageFiles: Express.Multer.File[]) {
     const sku = normalizeSku(payload.sku);
 
     const skuExists = await repo.findBySku(sku);
@@ -33,24 +37,73 @@ export class ProductService {
 
     const images = (imageFiles || []).map((f) => f.filename);
 
-    return repo.create({
+    const initialStock = Math.max(0, Number(payload.stock ?? 0));
+
+    // ✅ Create product with stock 0
+    const created = await repo.create({
       name: payload.name,
       slug,
       sku,
       description: payload.description ?? "",
       price: payload.price,
       discountPrice: payload.discountPrice ?? null,
-      stock: payload.stock,
+      stock: 0,
       images,
       category: payload.categoryId,
       status: payload.status ?? "active",
       deleted_at: null,
     });
+
+    // ✅ If initial stock > 0 => do STOCK_IN (this also updates Product.stock)
+    if (initialStock > 0) {
+      await inventory.stockIn({
+        productId: String(created._id),
+        qty: initialStock,
+        actorId: null, // or pass admin id later
+        reason: "Initial stock on product creation",
+      });
+    }
+
+    // ✅ Return fresh product (with updated stock)
+    return ProductModel.findById(created._id).lean();
   }
 
-  listAdmin() {
-    return repo.listAdmin();
-  }
+ listAdmin(q?: { page?: number; limit?: number; search?: string }) {
+  const page = Math.max(1, Number(q?.page ?? 1));
+  const limit = Math.min(50, Math.max(1, Number(q?.limit ?? 10)));
+  const skip = (page - 1) * limit;
+
+  const search = String(q?.search ?? "").trim();
+  const re = search ? new RegExp(search, "i") : null;
+
+  const filter: any = { deleted_at: null };
+  if (re) filter.$or = [{ name: re }, { sku: re }];
+
+  const sortObj: Record<string, SortOrder> = { createdAt: -1 };
+
+  return Promise.all([
+    ProductModel.countDocuments(filter),
+    ProductModel.find(filter)
+      .sort(sortObj)
+      .skip(skip)
+      .limit(limit)
+      .populate("category", "name slug")
+      .lean(),
+  ]).then(([total, data]) => {
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
+    };
+  });
+}
 
   getById(id: string) {
     return repo.findById(id);

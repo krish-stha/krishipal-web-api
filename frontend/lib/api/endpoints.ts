@@ -41,6 +41,17 @@ export const endpoints = {
     refundApprove: (id: string) => `/admin/payments/refunds/${id}/approve`,
     refundReject: (id: string) => `/admin/payments/refunds/${id}/reject`,
     refundProcessed: (id: string) => `/admin/payments/refunds/${id}/processed`,
+
+    inventoryStockIn: "/admin/inventory/stock-in",
+    inventoryStockOut: "/admin/inventory/stock-out",
+    inventoryLogs: "/admin/inventory/logs",
+    inventoryLowStock: "/admin/inventory/low-stock",
+
+    blogs: "/admin/blogs",
+    blogById: (id: string) => `/admin/blogs/${id}`,
+
+    settings: "/admin/settings",
+    dashboardSummary: "/admin/dashboard/summary",
     
 
   },
@@ -50,6 +61,9 @@ export const endpoints = {
     products: "/products",
     productBySlug: (slug: string) => `/products/${slug}`,
     categories: "/categories", // (we'll add public categories below if you have route; if not, we’ll fetch admin categories later)
+
+    blogs: "/blogs",
+    blogBySlug: (slug: string) => `/blogs/${slug}`,
   },
 
   // ✅ CART
@@ -79,5 +93,13 @@ export const endpoints = {
   esewaInitiate: "/payments/esewa/initiate",
   esewaVerify: "/payments/esewa/verify",
 },
+
+settings: {
+  public: "/settings/public",
+},
+
+about: {
+  public: "/about", 
+}
 
 };

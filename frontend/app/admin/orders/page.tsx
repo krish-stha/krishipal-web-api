@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card } from "@/app/auth/components/ui/card";
 import { Button } from "@/app/auth/components/ui/button";
 import { adminListOrders } from "@/lib/api/admin/order";
@@ -24,6 +25,9 @@ function badge(status: string) {
 }
 
 export default function AdminOrdersPage() {
+  const router = useRouter();
+  const sp = useSearchParams();
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -34,13 +38,56 @@ export default function AdminOrdersPage() {
   const [rows, setRows] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
 
-  const fetchData = async (p = page) => {
+  // ✅ controlled date inputs (sync with URL)
+  const [from, setFrom] = useState<string>(sp.get("from") || "");
+  const [to, setTo] = useState<string>(sp.get("to") || "");
+
+  // ✅ query string to carry filters to detail page
+  const qs = useMemo(() => {
+    const q = new URLSearchParams();
+    if (from) q.set("from", from);
+    if (to) q.set("to", to);
+    const s = q.toString();
+    return s ? `?${s}` : "";
+  }, [from, to]);
+
+  // ✅ ONE parser that supports multiple backend response shapes
+  function parseOrdersResponse(res: any) {
+    // preferred: { success: true, data: rows, meta: {...} }
+    if (Array.isArray(res?.data) && res?.meta) {
+      return { rows: res.data, total: Number(res.meta?.total || 0) };
+    }
+
+    // common axios: { data: { success, data: rows, meta } }
+    if (Array.isArray(res?.data?.data) && res?.data?.meta) {
+      return { rows: res.data.data, total: Number(res.data.meta?.total || 0) };
+    }
+
+    // fallback: { success, data: rows }
+    if (Array.isArray(res?.data) && !res?.meta) {
+      return { rows: res.data, total: res.data.length };
+    }
+
+    // ultimate fallback
+    return { rows: [], total: 0 };
+  }
+
+  const fetchData = async (p: number, f: string, t: string) => {
     setLoading(true);
     setError("");
+
     try {
-      const res = await adminListOrders({ page: p, limit, search: search.trim() || undefined });
-      setRows(res.data?.data || []);
-      setTotal(res.data?.meta?.total || 0);
+      const res = await adminListOrders({
+        page: p,
+        limit,
+        search: search.trim() || undefined,
+        ...(f ? { from: f } : {}),
+        ...(t ? { to: t } : {}),
+      });
+
+      const parsed = parseOrdersResponse(res);
+      setRows(parsed.rows);
+      setTotal(parsed.total);
     } catch (e: any) {
       setError(e?.response?.data?.message || e?.message || "Failed to load orders");
       setRows([]);
@@ -50,10 +97,18 @@ export default function AdminOrdersPage() {
     }
   };
 
+  // ✅ when URL changes (back/forward/paste link), sync inputs + refetch
   useEffect(() => {
-    fetchData(1);
+    const nf = sp.get("from") || "";
+    const nt = sp.get("to") || "";
+
+    setFrom(nf);
+    setTo(nt);
+
+    setPage(1);
+    fetchData(1, nf, nt);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [sp]);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
@@ -63,7 +118,6 @@ export default function AdminOrdersPage() {
         {/* Header */}
         <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <div className="text-xs text-slate-500">Admin / Orders</div>
             <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">Orders</h1>
             <p className="mt-1 text-sm text-slate-600">Manage user orders and update order status.</p>
           </div>
@@ -73,8 +127,9 @@ export default function AdminOrdersPage() {
           </div>
         </div>
 
-        {/* Search */}
+        {/* Search + Date Filter */}
         <Card className="rounded-3xl border-slate-200 bg-white p-4 sm:p-5 shadow-sm mb-4">
+          {/* Row 1 */}
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="flex gap-2 w-full md:w-[560px]">
               <input
@@ -88,7 +143,7 @@ export default function AdminOrdersPage() {
                 className="h-11 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-60"
                 onClick={() => {
                   setPage(1);
-                  fetchData(1);
+                  fetchData(1, from, to);
                 }}
                 disabled={loading}
               >
@@ -99,10 +154,52 @@ export default function AdminOrdersPage() {
             <Button
               variant="outline"
               className="h-11 rounded-2xl border-slate-200 bg-white hover:bg-slate-100"
-              onClick={() => fetchData(page)}
+              onClick={() => fetchData(page, from, to)}
               disabled={loading}
             >
               Refresh
+            </Button>
+          </div>
+
+          {/* Row 2: Dates */}
+          <div className="mt-3 flex flex-col sm:flex-row gap-2 sm:items-center">
+            <input
+              type="date"
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+              className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm outline-none shadow-sm focus:ring-4 focus:ring-emerald-100 focus:border-emerald-300"
+            />
+            <input
+              type="date"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm outline-none shadow-sm focus:ring-4 focus:ring-emerald-100 focus:border-emerald-300"
+            />
+
+            <Button
+              className="h-11 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white"
+              onClick={() => {
+                const q = new URLSearchParams();
+                if (from) q.set("from", from);
+                if (to) q.set("to", to);
+                router.replace(`/admin/orders${q.toString() ? `?${q.toString()}` : ""}`);
+              }}
+              disabled={loading}
+            >
+              Apply
+            </Button>
+
+            <Button
+              variant="outline"
+              className="h-11 rounded-2xl border-slate-200 bg-white hover:bg-slate-100"
+              onClick={() => {
+                setFrom("");
+                setTo("");
+                router.replace("/admin/orders");
+              }}
+              disabled={loading}
+            >
+              Clear
             </Button>
           </div>
         </Card>
@@ -152,11 +249,8 @@ export default function AdminOrdersPage() {
                       </td>
 
                       <td className="p-3 sm:p-4 text-slate-900 font-medium">{o.userName || "-"}</td>
-
                       <td className="p-3 sm:p-4 text-slate-700">{o.userEmail || "-"}</td>
-
                       <td className="p-3 sm:p-4 text-slate-700">{o.itemsCount ?? 0}</td>
-
                       <td className="p-3 sm:p-4 font-semibold text-emerald-700">{money(o.total)}</td>
 
                       <td className="p-3 sm:p-4">
@@ -168,7 +262,8 @@ export default function AdminOrdersPage() {
                       </td>
 
                       <td className="p-3 sm:p-4 text-right">
-                        <Link href={`/admin/orders/${o._id}`}>
+                        {/* ✅ carry from/to */}
+                        <Link href={`/admin/orders/${o._id}${qs}`}>
                           <Button
                             variant="outline"
                             className="h-10 rounded-2xl border-slate-200 bg-white hover:bg-slate-100"
@@ -194,7 +289,7 @@ export default function AdminOrdersPage() {
             onClick={() => {
               const p = Math.max(1, page - 1);
               setPage(p);
-              fetchData(p);
+              fetchData(p, from, to);
             }}
           >
             Prev
@@ -211,7 +306,7 @@ export default function AdminOrdersPage() {
             onClick={() => {
               const p = Math.min(totalPages, page + 1);
               setPage(p);
-              fetchData(p);
+              fetchData(p, from, to);
             }}
           >
             Next

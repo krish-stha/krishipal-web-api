@@ -1,383 +1,443 @@
-// "use client";
+"use client";
 
-// import { useEffect, useState } from "react";
-// import { Card } from "@/app/auth/components/ui/card";
-// import { Button } from "@/app/auth/components/ui/button";
-// import {
-//   adminListPaymentLogs,
-//   adminListRefunds,
-//   adminApproveRefund,
-//   adminRejectRefund,
-//   adminMarkRefundProcessed,
-// } from "@/lib/api/admin/payment";
+import { useEffect, useState } from "react";
+import { Card } from "@/app/auth/components/ui/card";
+import { Button } from "@/app/auth/components/ui/button";
+import {
+  adminListPaymentLogs,
+  adminListRefunds,
+  adminApproveRefund,
+  adminRejectRefund,
+  adminMarkRefundProcessed,
+} from "@/lib/api/admin/payment";
+import { useToast } from "@/hooks/use-toast";
+import { NoteDialog } from "@/app/auth/components/ui/alert-dialog";
 
-// function rsFromPaisa(paisa: any) {
-//   const v = Number(paisa ?? 0);
-//   return `Rs. ${Number.isFinite(v) ? Math.round(v / 100) : 0}`;
-// }
+function rsFromPaisa(paisa: any) {
+  const v = Number(paisa ?? 0);
+  return `Rs. ${Number.isFinite(v) ? Math.round(v / 100) : 0}`;
+}
 
-// export default function AdminPaymentsPage() {
-//   const [tab, setTab] = useState<"logs" | "refunds">("logs");
 
-//   // logs
-//   const [logLoading, setLogLoading] = useState(false);
-//   const [logError, setLogError] = useState("");
-//   const [logSearch, setLogSearch] = useState("");
-//   const [logPage, setLogPage] = useState(1);
-//   const [logRows, setLogRows] = useState<any[]>([]);
-//   const [logTotal, setLogTotal] = useState(0);
+export default function AdminPaymentsPage() {
+  const [tab, setTab] = useState<"logs" | "refunds">("logs");
 
-//   // refunds
-//   const [rfLoading, setRfLoading] = useState(false);
-//   const [rfError, setRfError] = useState("");
-//   const [rfStatus, setRfStatus] = useState("");
-//   const [rfPage, setRfPage] = useState(1);
-//   const [rfRows, setRfRows] = useState<any[]>([]);
-//   const [rfTotal, setRfTotal] = useState(0);
+  // logs
+  const [logLoading, setLogLoading] = useState(false);
+  const [logError, setLogError] = useState("");
+  const [logSearch, setLogSearch] = useState("");
+  const [logPage, setLogPage] = useState(1);
+  const [logRows, setLogRows] = useState<any[]>([]);
+  const [logTotal, setLogTotal] = useState(0);
 
-//   const limit = 20;
+  // refunds
+  const [rfLoading, setRfLoading] = useState(false);
+  const [rfError, setRfError] = useState("");
+  const [rfStatus, setRfStatus] = useState("");
+  const [rfPage, setRfPage] = useState(1);
+  const [rfRows, setRfRows] = useState<any[]>([]);
+  const [rfTotal, setRfTotal] = useState(0);
 
-//   const loadLogs = async (p = logPage) => {
-//     setLogLoading(true);
-//     setLogError("");
-//     try {
-//       const res = await adminListPaymentLogs({
-//         page: p,
-//         limit,
-//         search: logSearch.trim() || undefined,
-//       });
-//       setLogRows(res.data?.data || []);
-//       setLogTotal(res.data?.meta?.total || 0);
-//     } catch (e: any) {
-//       setLogError(e?.response?.data?.message || e?.message || "Failed to load payment logs");
-//       setLogRows([]);
-//       setLogTotal(0);
-//     } finally {
-//       setLogLoading(false);
-//     }
-//   };
+  //dialog
+  const { toast } = useToast();
 
-//   const loadRefunds = async (p = rfPage) => {
-//     setRfLoading(true);
-//     setRfError("");
-//     try {
-//       const res = await adminListRefunds({
-//         page: p,
-//         limit,
-//         status: rfStatus || undefined,
-//       });
-//       setRfRows(res.data?.data || []);
-//       setRfTotal(res.data?.meta?.total || 0);
-//     } catch (e: any) {
-//       setRfError(e?.response?.data?.message || e?.message || "Failed to load refunds");
-//       setRfRows([]);
-//       setRfTotal(0);
-//     } finally {
-//       setRfLoading(false);
-//     }
-//   };
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [noteMode, setNoteMode] = useState<"approve" | "reject">("approve");
+  const [targetRefund, setTargetRefund] = useState<any | null>(null);
 
-//   useEffect(() => {
-//     loadLogs(1);
-//     loadRefunds(1);
-//     // eslint-disable-next-line react-hooks/exhaustive-deps
-//   }, []);
 
-//   const logPages = Math.max(1, Math.ceil(logTotal / limit));
-//   const rfPages = Math.max(1, Math.ceil(rfTotal / limit));
+  const limit = 20;
 
-//   return (
-//     <div className="p-6">
-//       <div className="mb-6">
-//         <div className="text-sm text-slate-500">Admin / Payments</div>
-//         <h1 className="text-2xl font-bold text-slate-900">Payments</h1>
-//         <p className="text-slate-600 mt-1">Payment logs, refunds, and audit trail.</p>
-//       </div>
+    const openApprove = (r: any) => {
+    setTargetRefund(r);
+    setNoteMode("approve");
+    setNoteOpen(true);
+  };
 
-//       <div className="flex gap-2 mb-4">
-//         <Button
-//           variant={tab === "logs" ? undefined : "outline"}
-//           className={tab === "logs" ? "bg-green-600 hover:bg-green-700 text-white" : "border-slate-300"}
-//           onClick={() => setTab("logs")}
-//         >
-//           Payment Logs
-//         </Button>
-//         <Button
-//           variant={tab === "refunds" ? undefined : "outline"}
-//           className={tab === "refunds" ? "bg-green-600 hover:bg-green-700 text-white" : "border-slate-300"}
-//           onClick={() => setTab("refunds")}
-//         >
-//           Refund Requests
-//         </Button>
-//       </div>
+  const openReject = (r: any) => {
+    setTargetRefund(r);
+    setNoteMode("reject");
+    setNoteOpen(true);
+  };
 
-//       {tab === "logs" && (
-//         <>
-//           <Card className="rounded-2xl p-4 mb-4">
-//             <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
-//               <div className="flex gap-2 w-full md:w-[520px]">
-//                 <input
-//                   value={logSearch}
-//                   onChange={(e) => setLogSearch(e.target.value)}
-//                   placeholder="Search by orderId / pidx / transaction id..."
-//                   className="flex-1 h-10 rounded-xl border bg-white px-3 outline-none focus:ring-2 focus:ring-green-200"
-//                 />
-//                 <Button
-//                   className="h-10 bg-green-600 hover:bg-green-700 text-white"
-//                   onClick={() => {
-//                     setLogPage(1);
-//                     loadLogs(1);
-//                   }}
-//                   disabled={logLoading}
-//                 >
-//                   Search
-//                 </Button>
-//               </div>
-//               <div className="text-sm text-slate-600">
-//                 Total logs: <b className="text-slate-900">{logTotal}</b>
-//               </div>
-//             </div>
-//           </Card>
+  const loadLogs = async (p = logPage) => {
+    setLogLoading(true);
+    setLogError("");
+    try {
+      const res = await adminListPaymentLogs({
+        page: p,
+        limit,
+        search: logSearch.trim() || undefined,
+      });
+      setLogRows(res.data?.data || []);
+      setLogTotal(res.data?.meta?.total || 0);
+    } catch (e: any) {
+      setLogError(e?.response?.data?.message || e?.message || "Failed to load payment logs");
+      setLogRows([]);
+      setLogTotal(0);
+    } finally {
+      setLogLoading(false);
+    }
+  };
 
-//           {logError && <div className="text-red-600 mb-4">{logError}</div>}
+  const loadRefunds = async (p = rfPage) => {
+    setRfLoading(true);
+    setRfError("");
+    try {
+      const res = await adminListRefunds({
+        page: p,
+        limit,
+        status: rfStatus || undefined,
+      });
+      setRfRows(res.data?.data || []);
+      setRfTotal(res.data?.meta?.total || 0);
+    } catch (e: any) {
+      setRfError(e?.response?.data?.message || e?.message || "Failed to load refunds");
+      setRfRows([]);
+      setRfTotal(0);
+    } finally {
+      setRfLoading(false);
+    }
+  };
 
-//           <Card className="rounded-2xl overflow-hidden">
-//             <div className="overflow-auto">
-//               <table className="min-w-[1100px] w-full text-sm">
-//                 <thead className="bg-slate-50">
-//                   <tr className="text-left">
-//                     <th className="p-3 font-semibold">Time</th>
-//                     <th className="p-3 font-semibold">Order</th>
-//                     <th className="p-3 font-semibold">User</th>
-//                     <th className="p-3 font-semibold">Gateway</th>
-//                     <th className="p-3 font-semibold">Action</th>
-//                     <th className="p-3 font-semibold">Status</th>
-//                     <th className="p-3 font-semibold">Amount</th>
-//                     <th className="p-3 font-semibold">Ref</th>
-//                     <th className="p-3 font-semibold">Message</th>
-//                   </tr>
-//                 </thead>
-//                 <tbody>
-//                   {logLoading ? (
-//                     <tr>
-//                       <td className="p-4 text-slate-500" colSpan={9}>
-//                         Loading...
-//                       </td>
-//                     </tr>
-//                   ) : logRows.length === 0 ? (
-//                     <tr>
-//                       <td className="p-4 text-slate-500" colSpan={9}>
-//                         No logs
-//                       </td>
-//                     </tr>
-//                   ) : (
-//                     logRows.map((r) => (
-//                       <tr key={r._id} className="border-t">
-//                         <td className="p-3 text-slate-600">{r.createdAt ? new Date(r.createdAt).toLocaleString() : "-"}</td>
-//                         <td className="p-3 font-mono text-xs">{String(r.order?._id || r.order || "-").slice(-10)}</td>
-//                         <td className="p-3">{r.user?.email || r.user?.fullName || "-"}</td>
-//                         <td className="p-3">{r.gateway}</td>
-//                         <td className="p-3">{r.action}</td>
-//                         <td className="p-3">{r.status}</td>
-//                         <td className="p-3 font-semibold text-green-700">{rsFromPaisa(r.amountPaisa)}</td>
-//                         <td className="p-3 font-mono text-xs">{r.ref || "-"}</td>
-//                         <td className="p-3 text-slate-600">{r.message || "-"}</td>
-//                       </tr>
-//                     ))
-//                   )}
-//                 </tbody>
-//               </table>
-//             </div>
-//           </Card>
+  useEffect(() => {
+    loadLogs(1);
+    loadRefunds(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-//           <div className="mt-5 flex items-center justify-between">
-//             <Button
-//               variant="outline"
-//               className="border-slate-300"
-//               disabled={logLoading || logPage <= 1}
-//               onClick={() => {
-//                 const p = Math.max(1, logPage - 1);
-//                 setLogPage(p);
-//                 loadLogs(p);
-//               }}
-//             >
-//               Prev
-//             </Button>
+  const logPages = Math.max(1, Math.ceil(logTotal / limit));
+  const rfPages = Math.max(1, Math.ceil(rfTotal / limit));
 
-//             <div className="text-sm text-slate-600">
-//               Page <b className="text-slate-900">{logPage}</b> / {logPages}
-//             </div>
 
-//             <Button
-//               variant="outline"
-//               className="border-slate-300"
-//               disabled={logLoading || logPage >= logPages}
-//               onClick={() => {
-//                 const p = Math.min(logPages, logPage + 1);
-//                 setLogPage(p);
-//                 loadLogs(p);
-//               }}
-//             >
-//               Next
-//             </Button>
-//           </div>
-//         </>
-//       )}
+    const onConfirmNote = async (note: string) => {
+    if (!targetRefund) return;
 
-//       {tab === "refunds" && (
-//         <>
-//           <Card className="rounded-2xl p-4 mb-4">
-//             <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
-//               <div className="flex gap-2 items-center">
-//                 <select
-//                   value={rfStatus}
-//                   onChange={(e) => setRfStatus(e.target.value)}
-//                   className="h-10 rounded-xl border bg-white px-3 outline-none focus:ring-2 focus:ring-green-200"
-//                 >
-//                   <option value="">All</option>
-//                   <option value="requested">Requested</option>
-//                   <option value="approved">Approved</option>
-//                   <option value="rejected">Rejected</option>
-//                   <option value="processed">Processed</option>
-//                 </select>
+    try {
+      if (noteMode === "approve") {
+        await adminApproveRefund(targetRefund._id, note);
+        toast({ title: "Approved", description: "Refund request approved." });
+      } else {
+        await adminRejectRefund(targetRefund._id, note);
+        toast({ title: "Rejected", description: "Refund request rejected." });
+      }
 
-//                 <Button
-//                   className="h-10 bg-green-600 hover:bg-green-700 text-white"
-//                   onClick={() => {
-//                     setRfPage(1);
-//                     loadRefunds(1);
-//                   }}
-//                   disabled={rfLoading}
-//                 >
-//                   Apply
-//                 </Button>
-//               </div>
+      setNoteOpen(false);
+      setTargetRefund(null);
+      await loadRefunds(rfPage);
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || e?.message || "Action failed";
+      toast({ title: "Failed", description: msg, variant: "destructive" });
+    }
+  };
 
-//               <div className="text-sm text-slate-600">
-//                 Total refunds: <b className="text-slate-900">{rfTotal}</b>
-//               </div>
-//             </div>
-//           </Card>
+  return (
+    <div className="p-6">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-slate-900">Payments</h1>
+        <p className="text-slate-600 mt-1">Payment logs, refunds, and audit trail.</p>
+      </div>
 
-//           {rfError && <div className="text-red-600 mb-4">{rfError}</div>}
+      <div className="flex gap-2 mb-4">
+        <Button
+          variant={tab === "logs" ? undefined : "outline"}
+          className={tab === "logs" ? "bg-green-600 hover:bg-green-700 text-white" : "border-slate-300"}
+          onClick={() => setTab("logs")}
+        >
+          Payment Logs
+        </Button>
+        <Button
+          variant={tab === "refunds" ? undefined : "outline"}
+          className={tab === "refunds" ? "bg-green-600 hover:bg-green-700 text-white" : "border-slate-300"}
+          onClick={() => setTab("refunds")}
+        >
+          Refund Requests
+        </Button>
+      </div>
 
-//           <Card className="rounded-2xl overflow-hidden">
-//             <div className="overflow-auto">
-//               <table className="min-w-[1100px] w-full text-sm">
-//                 <thead className="bg-slate-50">
-//                   <tr className="text-left">
-//                     <th className="p-3 font-semibold">Time</th>
-//                     <th className="p-3 font-semibold">Order</th>
-//                     <th className="p-3 font-semibold">User</th>
-//                     <th className="p-3 font-semibold">Amount</th>
-//                     <th className="p-3 font-semibold">Status</th>
-//                     <th className="p-3 font-semibold">Reason</th>
-//                     <th className="p-3 font-semibold text-right">Action</th>
-//                   </tr>
-//                 </thead>
-//                 <tbody>
-//                   {rfLoading ? (
-//                     <tr>
-//                       <td className="p-4 text-slate-500" colSpan={7}>
-//                         Loading...
-//                       </td>
-//                     </tr>
-//                   ) : rfRows.length === 0 ? (
-//                     <tr>
-//                       <td className="p-4 text-slate-500" colSpan={7}>
-//                         No refunds
-//                       </td>
-//                     </tr>
-//                   ) : (
-//                     rfRows.map((r) => (
-//                       <tr key={r._id} className="border-t">
-//                         <td className="p-3 text-slate-600">{r.createdAt ? new Date(r.createdAt).toLocaleString() : "-"}</td>
-//                         <td className="p-3 font-mono text-xs">{String(r.order?._id || "-").slice(-10)}</td>
-//                         <td className="p-3">{r.user?.email || "-"}</td>
-//                         <td className="p-3 font-semibold text-green-700">{rsFromPaisa(r.amountPaisa)}</td>
-//                         <td className="p-3">{r.status}</td>
-//                         <td className="p-3 text-slate-600">{r.reason || "-"}</td>
+      {tab === "logs" && (
+        <>
+          <Card className="rounded-2xl p-4 mb-4">
+            <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
+              <div className="flex gap-2 w-full md:w-[520px]">
+                <input
+                  value={logSearch}
+                  onChange={(e) => setLogSearch(e.target.value)}
+                  placeholder="Search by orderId / pidx / transaction id..."
+                  className="flex-1 h-10 rounded-xl border bg-white px-3 outline-none focus:ring-2 focus:ring-green-200"
+                />
+                <Button
+                  className="h-10 bg-green-600 hover:bg-green-700 text-white"
+                  onClick={() => {
+                    setLogPage(1);
+                    loadLogs(1);
+                  }}
+                  disabled={logLoading}
+                >
+                  Search
+                </Button>
+              </div>
+              <div className="text-sm text-slate-600">
+                Total logs: <b className="text-slate-900">{logTotal}</b>
+              </div>
+            </div>
+          </Card>
 
-//                         <td className="p-3 text-right space-x-2">
-//                           {r.status === "requested" && (
-//                             <>
-//                               <Button
-//                                 variant="outline"
-//                                 className="border-slate-300"
-//                                 onClick={async () => {
-//                                   const note = prompt("Admin note (optional):") || "";
-//                                   await adminApproveRefund(r._id, note);
-//                                   loadRefunds(rfPage);
-//                                 }}
-//                               >
-//                                 Approve
-//                               </Button>
-//                               <Button
-//                                 className="bg-red-600 hover:bg-red-700 text-white"
-//                                 onClick={async () => {
-//                                   const note = prompt("Reject reason (optional):") || "";
-//                                   await adminRejectRefund(r._id, note);
-//                                   loadRefunds(rfPage);
-//                                 }}
-//                               >
-//                                 Reject
-//                               </Button>
-//                             </>
-//                           )}
+          {logError && <div className="text-red-600 mb-4">{logError}</div>}
 
-//                           {r.status === "approved" && (
-//                             <Button
-//                               className="bg-purple-600 hover:bg-purple-700 text-white"
-//                               onClick={async () => {
-//                                 await adminMarkRefundProcessed(r._id);
-//                                 loadRefunds(rfPage);
-//                               }}
-//                             >
-//                               Mark Processed
-//                             </Button>
-//                           )}
-//                         </td>
-//                       </tr>
-//                     ))
-//                   )}
-//                 </tbody>
-//               </table>
-//             </div>
-//           </Card>
+          <Card className="rounded-2xl overflow-hidden">
+            <div className="overflow-auto">
+              <table className="min-w-[1100px] w-full text-sm">
+                <thead className="bg-slate-50">
+                  <tr className="text-left">
+                    <th className="p-3 font-semibold">Time</th>
+                    <th className="p-3 font-semibold">Order</th>
+                    <th className="p-3 font-semibold">User</th>
+                    <th className="p-3 font-semibold">Gateway</th>
+                    <th className="p-3 font-semibold">Action</th>
+                    <th className="p-3 font-semibold">Status</th>
+                    <th className="p-3 font-semibold">Amount</th>
+                    <th className="p-3 font-semibold">Ref</th>
+                    <th className="p-3 font-semibold">Message</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {logLoading ? (
+                    <tr>
+                      <td className="p-4 text-slate-500" colSpan={9}>
+                        Loading...
+                      </td>
+                    </tr>
+                  ) : logRows.length === 0 ? (
+                    <tr>
+                      <td className="p-4 text-slate-500" colSpan={9}>
+                        No logs
+                      </td>
+                    </tr>
+                  ) : (
+                    logRows.map((r) => (
+                      <tr key={r._id} className="border-t">
+                        <td className="p-3 text-slate-600">{r.createdAt ? new Date(r.createdAt).toLocaleString() : "-"}</td>
+                        <td className="p-3 font-mono text-xs">{String(r.order?._id || r.order || "-").slice(-10)}</td>
+                        <td className="p-3">{r.user?.email || r.user?.fullName || "-"}</td>
+                        <td className="p-3">{r.gateway}</td>
+                        <td className="p-3">{r.action}</td>
+                        <td className="p-3">{r.status}</td>
+                        <td className="p-3 font-semibold text-green-700">{rsFromPaisa(r.amountPaisa)}</td>
+                        <td className="p-3 font-mono text-xs">{r.ref || "-"}</td>
+                        <td className="p-3 text-slate-600">{r.message || "-"}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
 
-//           <div className="mt-5 flex items-center justify-between">
-//             <Button
-//               variant="outline"
-//               className="border-slate-300"
-//               disabled={rfLoading || rfPage <= 1}
-//               onClick={() => {
-//                 const p = Math.max(1, rfPage - 1);
-//                 setRfPage(p);
-//                 loadRefunds(p);
-//               }}
-//             >
-//               Prev
-//             </Button>
+          <div className="mt-5 flex items-center justify-between">
+            <Button
+              variant="outline"
+              className="border-slate-300"
+              disabled={logLoading || logPage <= 1}
+              onClick={() => {
+                const p = Math.max(1, logPage - 1);
+                setLogPage(p);
+                loadLogs(p);
+              }}
+            >
+              Prev
+            </Button>
 
-//             <div className="text-sm text-slate-600">
-//               Page <b className="text-slate-900">{rfPage}</b> / {rfPages}
-//             </div>
+            <div className="text-sm text-slate-600">
+              Page <b className="text-slate-900">{logPage}</b> / {logPages}
+            </div>
 
-//             <Button
-//               variant="outline"
-//               className="border-slate-300"
-//               disabled={rfLoading || rfPage >= rfPages}
-//               onClick={() => {
-//                 const p = Math.min(rfPages, rfPage + 1);
-//                 setRfPage(p);
-//                 loadRefunds(p);
-//               }}
-//             >
-//               Next
-//             </Button>
-//           </div>
-//         </>
-//       )}
-//     </div>
-//   );
-// }
+            <Button
+              variant="outline"
+              className="border-slate-300"
+              disabled={logLoading || logPage >= logPages}
+              onClick={() => {
+                const p = Math.min(logPages, logPage + 1);
+                setLogPage(p);
+                loadLogs(p);
+              }}
+            >
+              Next
+            </Button>
+          </div>
+        </>
+      )}
+
+      {tab === "refunds" && (
+        <>
+          <Card className="rounded-2xl p-4 mb-4">
+            <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
+              <div className="flex gap-2 items-center">
+                <select
+                  value={rfStatus}
+                  onChange={(e) => setRfStatus(e.target.value)}
+                  className="h-10 rounded-xl border bg-white px-3 outline-none focus:ring-2 focus:ring-green-200"
+                >
+                  <option value="">All</option>
+                  <option value="requested">Requested</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="processed">Processed</option>
+                </select>
+
+                <Button
+                  className="h-10 bg-green-600 hover:bg-green-700 text-white"
+                  onClick={() => {
+                    setRfPage(1);
+                    loadRefunds(1);
+                  }}
+                  disabled={rfLoading}
+                >
+                  Apply
+                </Button>
+              </div>
+
+              <div className="text-sm text-slate-600">
+                Total refunds: <b className="text-slate-900">{rfTotal}</b>
+              </div>
+            </div>
+          </Card>
+
+          {rfError && <div className="text-red-600 mb-4">{rfError}</div>}
+
+          <Card className="rounded-2xl overflow-hidden">
+            <div className="overflow-auto">
+              <table className="min-w-[1100px] w-full text-sm">
+                <thead className="bg-slate-50">
+                  <tr className="text-left">
+                    <th className="p-3 font-semibold">Time</th>
+                    <th className="p-3 font-semibold">Order</th>
+                    <th className="p-3 font-semibold">User</th>
+                    <th className="p-3 font-semibold">Amount</th>
+                    <th className="p-3 font-semibold">Status</th>
+                    <th className="p-3 font-semibold">Reason</th>
+                    <th className="p-3 font-semibold text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rfLoading ? (
+                    <tr>
+                      <td className="p-4 text-slate-500" colSpan={7}>
+                        Loading...
+                      </td>
+                    </tr>
+                  ) : rfRows.length === 0 ? (
+                    <tr>
+                      <td className="p-4 text-slate-500" colSpan={7}>
+                        No refunds
+                      </td>
+                    </tr>
+                  ) : (
+                    rfRows.map((r) => (
+                      <tr key={r._id} className="border-t">
+                        <td className="p-3 text-slate-600">{r.createdAt ? new Date(r.createdAt).toLocaleString() : "-"}</td>
+                        <td className="p-3 font-mono text-xs">{String(r.order?._id || "-").slice(-10)}</td>
+                        <td className="p-3">{r.user?.email || "-"}</td>
+                        <td className="p-3 font-semibold text-green-700">{rsFromPaisa(r.amountPaisa)}</td>
+                        <td className="p-3">{r.status}</td>
+                        <td className="p-3 text-slate-600">{r.reason || "-"}</td>
+
+                        <td className="p-3 text-right space-x-2">
+                          {r.status === "requested" && (
+                            <>
+                              <Button
+                                variant="outline"
+                                className="border-slate-300"
+                                onClick={() => openApprove(r)}
+                              >
+                                Approve
+                              </Button>
+                              <Button
+                                className="bg-red-600 hover:bg-red-700 text-white"
+                                onClick={() => openReject(r)}
+                              >
+                                Reject
+                              </Button>
+                            </>
+                          )}
+
+                          {r.status === "approved" && (
+                            <Button
+                              className="bg-purple-600 hover:bg-purple-700 text-white"
+                              onClick={async () => {
+  try {
+    await adminMarkRefundProcessed(r._id);
+    toast({ title: "Processed", description: "Refund marked as processed." });
+    loadRefunds(rfPage);
+  } catch (e: any) {
+    const msg = e?.response?.data?.message || e?.message || "Failed";
+    toast({ title: "Failed", description: msg, variant: "destructive" });
+  }
+}}
+                            >
+                              Mark Processed
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
+          <NoteDialog
+  open={noteOpen}
+  onOpenChange={(v) => {
+    setNoteOpen(v);
+    if (!v) setTargetRefund(null);
+  }}
+  title={noteMode === "approve" ? "Approve refund?" : "Reject refund?"}
+  description={
+    targetRefund
+      ? `Order: ${String(targetRefund.order?._id || "-").slice(-10)} • Amount: ${rsFromPaisa(targetRefund.amountPaisa)}`
+      : ""
+  }
+  placeholder={noteMode === "approve" ? "Approval note (optional)..." : "Reason for rejection (optional)..."}
+  confirmText={noteMode === "approve" ? "Approve" : "Reject"}
+  destructive={noteMode === "reject"}
+  onConfirm={onConfirmNote}
+/>
+
+          <div className="mt-5 flex items-center justify-between">
+            <Button
+              variant="outline"
+              className="border-slate-300"
+              disabled={rfLoading || rfPage <= 1}
+              onClick={() => {
+                const p = Math.max(1, rfPage - 1);
+                setRfPage(p);
+                loadRefunds(p);
+              }}
+            >
+              Prev
+            </Button>
+
+            <div className="text-sm text-slate-600">
+              Page <b className="text-slate-900">{rfPage}</b> / {rfPages}
+            </div>
+
+            <Button
+              variant="outline"
+              className="border-slate-300"
+              disabled={rfLoading || rfPage >= rfPages}
+              onClick={() => {
+                const p = Math.min(rfPages, rfPage + 1);
+                setRfPage(p);
+                loadRefunds(p);
+              }}
+            >
+              Next
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}

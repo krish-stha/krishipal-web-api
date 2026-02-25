@@ -11,6 +11,9 @@ import { UserModel } from "../models/user.model";
 import { generateInvoicePdfBuffer } from "../services/invoice.service";
 import { sendPaymentReceiptEmail } from "../services/mail.service";
 import crypto from "crypto";
+import { InventoryOrderService } from "../services/inventory.order.service";
+import { getCompanyFromSettings } from "../services/company.service";
+import fs from "fs";
 
 function mustUserId(req: AuthRequest) {
   const userId = req.user?.id;
@@ -298,11 +301,13 @@ if (order.paymentStatus === "paid") {
     const info = khaltiLookup?.data || {};
     const status = String(info?.status || "").toLowerCase();
 
+
     order.paymentGateway = "KHALTI";
     order.paymentMeta = info;
     order.paymentRef = pidx;
 
     if (status === "completed") {
+
       order.paymentStatus = "paid";
       order.paidAt = new Date();
       await order.save();
@@ -329,19 +334,26 @@ if (user?.email) {
   const cc = String((user as any)?.countryCode || "").trim();
   const ph = String((user as any)?.phone || "").trim();
   const customerPhone = ph ? `${cc}${ph}` : "-";
+  
 
-  const invoicePdf = await generateInvoicePdfBuffer({
-    order: order.toObject(),
-    company: { name: COMPANY_NAME, address: COMPANY_ADDRESS },
-    logoPath: COMPANY_LOGO_PATH,
+  const company = await getCompanyFromSettings();
+const safeLogoPath = company.logoPath && fs.existsSync(company.logoPath) ? company.logoPath : undefined;
 
-    // ✅ pass customer explicitly (strongest + no confusion)
-    customer: {
-      name: (user as any)?.fullName || "-",
-      email: (user as any)?.email || "-",
-      phone: customerPhone,
-    },
-  });
+const invoicePdf = await generateInvoicePdfBuffer({
+  order: order.toObject(),
+  company: {
+    name: company.name,
+    address: company.address,
+    email: company.email,
+    phone: company.phone,
+  },
+  logoPath: safeLogoPath,
+  customer: {
+    name: (user as any)?.fullName || "-",
+    email: (user as any)?.email || "-",
+    phone: customerPhone,
+  },
+});
 
   await sendPaymentReceiptEmail({
     to: (user as any).email,
@@ -416,8 +428,8 @@ async esewaInitiate(req: AuthRequest, res: Response) {
   const transaction_uuid = `KP-${String(order._id).slice(-10)}-${Date.now()}`;
 
   // ✅ redirect to FRONTEND callback (works in localhost)
-  const success_url = `${FRONTEND_URL}/payments/esewa/callback?orderId=${String(order._id)}`;
-  const failure_url = `${FRONTEND_URL}/payments/esewa/failure?orderId=${String(order._id)}`;
+  const success_url = `${FRONTEND_URL}/payments/esewa/callback/${String(order._id)}`;
+  const failure_url = `${FRONTEND_URL}/payments/esewa/failure/${String(order._id)}`;
 
   const total_amount = toEsewaAmountRs(order.total);
 
@@ -480,18 +492,19 @@ async esewaInitiate(req: AuthRequest, res: Response) {
 }
 
 // POST /api/payments/esewa/verify
-async esewaVerify(req: AuthRequest, res: Response) {
-  const userId = mustUserId(req);
-
+// ✅ POST /api/payments/esewa/verify (PUBLIC)
+async esewaVerify(req: any, res: Response) {
   const orderId = String(req.body?.orderId || "").trim();
   const data = String(req.body?.data || "").trim(); // base64 json
 
   if (!mongoose.Types.ObjectId.isValid(orderId)) throw new HttpError(400, "Invalid orderId");
   if (!data) throw new HttpError(400, "data is required");
 
-  const order = await OrderModel.findOne({ _id: orderId, user: userId, deleted_at: null });
+  // ✅ PUBLIC: do NOT require userId for gateway callback
+  const order = await OrderModel.findOne({ _id: orderId, deleted_at: null });
   if (!order) throw new HttpError(404, "Order not found");
 
+  const userId = String(order.user); // for logs/email only
   const amountPaisa = Math.round(Number(order.total || 0) * 100);
 
   await logPayment({
@@ -506,7 +519,8 @@ async esewaVerify(req: AuthRequest, res: Response) {
     payload: { orderId, hasData: true },
   });
 
-  if (order.paymentStatus === "paid") {
+  // ✅ If already paid, return
+  if (String(order.paymentStatus || "").toLowerCase() === "paid") {
     await logPayment({
       orderId,
       userId,
@@ -528,10 +542,21 @@ async esewaVerify(req: AuthRequest, res: Response) {
   try {
     resp = safeBase64JsonDecode(data);
   } catch {
+    await logPayment({
+      orderId,
+      userId,
+      gateway: "ESEWA",
+      action: "VERIFY",
+      status: "failed",
+      amountPaisa,
+      ref: order.paymentRef || null,
+      message: "Invalid eSewa data payload (base64 decode failed)",
+      payload: { dataPreview: data.slice(0, 20) + "..." },
+    });
     throw new HttpError(400, "Invalid eSewa data payload");
   }
 
-  // resp should include: signed_field_names + signature + transaction_uuid + total_amount + product_code + status
+  // 2) Signature verify
   const signedFieldNames = String(resp?.signed_field_names || "").trim();
   const signature = String(resp?.signature || "").trim();
 
@@ -550,7 +575,6 @@ async esewaVerify(req: AuthRequest, res: Response) {
     throw new HttpError(400, "Invalid eSewa response (missing signature)");
   }
 
-  // 2) Verify signature
   const msg = buildSignedFieldString(resp, signedFieldNames);
   const expectedSig = hmacSha256Base64(ESEWA_SECRET_KEY, msg);
 
@@ -569,26 +593,18 @@ async esewaVerify(req: AuthRequest, res: Response) {
     throw new HttpError(400, "eSewa signature verification failed");
   }
 
+  // 3) Extract fields
   const transaction_uuid = String(resp?.transaction_uuid || "").trim();
-  const total_amount = String(resp?.total_amount || "").trim();
+  const total_amount = Number(resp?.total_amount || 0).toFixed(2);
   const product_code = String(resp?.product_code || "").trim();
-  const status = String(resp?.status || "").toUpperCase();
+  const statusFromEsewa = String(resp?.status || "").toUpperCase();
 
-  // basic checks
   if (!transaction_uuid || !total_amount || !product_code) {
     throw new HttpError(400, "Invalid eSewa response fields");
   }
 
-  // 3) Status check (server-to-server)
-  let statusResp: any;
-  try {
-    // eSewa status endpoint expects query params
-    const url = `${ESEWA_STATUS_URL}?product_code=${encodeURIComponent(product_code)}&total_amount=${encodeURIComponent(
-      total_amount
-    )}&transaction_uuid=${encodeURIComponent(transaction_uuid)}`;
-
-    statusResp = await axios.get(url);
-  } catch (e: any) {
+  // ✅ CRITICAL: Must match the initiated reference you saved
+  if (String(order.paymentRef || "") !== transaction_uuid) {
     await logPayment({
       orderId,
       userId,
@@ -597,22 +613,66 @@ async esewaVerify(req: AuthRequest, res: Response) {
       status: "failed",
       amountPaisa,
       ref: transaction_uuid,
-      message: "eSewa status check failed",
-      payload: e?.response?.data || e?.message,
+      message: "Transaction UUID mismatch with order.paymentRef",
+      payload: { orderPaymentRef: order.paymentRef, transaction_uuid },
     });
-    throw new HttpError(400, "eSewa status check failed");
+    throw new HttpError(400, "Transaction UUID mismatch");
   }
+
+  // 4) Server-to-server status check (most reliable)
+  let statusResp: any;
+const totalAmountFixed = Number(total_amount).toFixed(2);
+
+try {
+  statusResp = await axios.get(ESEWA_STATUS_URL, {
+    params: {
+      product_code,
+      total_amount: totalAmountFixed,
+      transaction_uuid,
+    },
+    timeout: 15000,
+  });
+} catch (e: any) {
+  console.log("ESEWA STATUS ERROR:", {
+    url: ESEWA_STATUS_URL,
+    message: e?.message,
+    status: e?.response?.status,
+    data: e?.response?.data,
+    params: { product_code, total_amount: totalAmountFixed, transaction_uuid },
+  });
+
+  await logPayment({
+    orderId,
+    userId,
+    gateway: "ESEWA",
+    action: "VERIFY",
+    status: "failed",
+    amountPaisa,
+    ref: transaction_uuid,
+    message: "eSewa status check failed",
+    payload: {
+      errMessage: e?.message,
+      errStatus: e?.response?.status,
+      errData: e?.response?.data,
+      product_code,
+      total_amount,
+      transaction_uuid,
+    },
+  });
+
+  throw new HttpError(400, "eSewa status check failed");
+}
 
   const stInfo = statusResp?.data || {};
   const stStatus = String(stInfo?.status || "").toUpperCase(); // expect COMPLETE
 
   // Save meta always
   order.paymentGateway = "ESEWA";
-  order.paymentRef = transaction_uuid;
   order.paymentMeta = { resp, statusCheck: stInfo };
 
-  // ✅ Only mark paid if COMPLETE
+  // ✅ Mark paid only if COMPLETE
   if (stStatus === "COMPLETE") {
+
     order.paymentStatus = "paid";
     order.paidAt = new Date();
     await order.save();
@@ -629,7 +689,7 @@ async esewaVerify(req: AuthRequest, res: Response) {
       payload: { resp, statusCheck: stInfo },
     });
 
-    // ✅ Send payment receipt email with invoice (same as Khalti)
+    // ✅ Email receipt + invoice (same as you did)
     try {
       const user = await UserModel.findById(userId).select("fullName email countryCode phone").lean();
 
@@ -638,16 +698,15 @@ async esewaVerify(req: AuthRequest, res: Response) {
         const ph = String((user as any)?.phone || "").trim();
         const customerPhone = ph ? `${cc}${ph}` : "-";
 
-        const invoicePdf = await generateInvoicePdfBuffer({
-          order: order.toObject(),
-          company: { name: COMPANY_NAME, address: COMPANY_ADDRESS },
-          logoPath: COMPANY_LOGO_PATH,
-          customer: {
-            name: (user as any)?.fullName || "-",
-            email: (user as any)?.email || "-",
-            phone: customerPhone,
-          },
-        });
+        const company = await getCompanyFromSettings();
+const safeLogoPath = company.logoPath && fs.existsSync(company.logoPath) ? company.logoPath : undefined;
+
+const invoicePdf = await generateInvoicePdfBuffer({
+  order: order.toObject(),
+  company: { name: company.name, address: company.address, email: company.email, phone: company.phone },
+  logoPath: safeLogoPath,
+  customer: { name: user.fullName, email: user.email, phone: customerPhone },
+});
 
         await sendPaymentReceiptEmail({
           to: (user as any).email,
@@ -665,8 +724,8 @@ async esewaVerify(req: AuthRequest, res: Response) {
     return res.status(200).json({ success: true, data: order.toObject() });
   }
 
-  // Not complete => mark failed/initiated
-  order.paymentStatus = status === "PENDING" ? "initiated" : "failed";
+  // Not complete
+  order.paymentStatus = statusFromEsewa === "PENDING" ? "initiated" : "failed";
   await order.save();
 
   await logPayment({
@@ -677,11 +736,11 @@ async esewaVerify(req: AuthRequest, res: Response) {
     status: "failed",
     amountPaisa,
     ref: transaction_uuid,
-    message: `Payment not COMPLETE: ${stStatus || status || "UNKNOWN"}`,
+    message: `Payment not COMPLETE: ${stStatus || statusFromEsewa || "UNKNOWN"}`,
     payload: { resp, statusCheck: stInfo },
   });
 
-  throw new HttpError(400, `Payment not completed: ${stStatus || status || "UNKNOWN"}`);
+  throw new HttpError(400, `Payment not completed: ${stStatus || statusFromEsewa || "UNKNOWN"}`);
 }
 
 async requestRefund(req: AuthRequest, res: Response) {

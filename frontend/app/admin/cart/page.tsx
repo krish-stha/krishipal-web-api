@@ -64,7 +64,6 @@ finally {
         <div className="text-sm text-slate-500">Admin / Cart</div>
         <h1 className="text-2xl font-bold text-slate-900">Carts</h1>
         <p className="text-slate-600 mt-1">
-          View carts, abandoned carts, and cart totals (read-only for now).
         </p>
       </div>
 

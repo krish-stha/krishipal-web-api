@@ -1,12 +1,90 @@
-import Link from "next/link"
-import Image from "next/image"
-import { Header } from "./user/component/header"
-import { Button } from "./auth/components/ui/button"
-import { Footer } from "./user/component/footer"
+"use client";
 
+import Link from "next/link";
+import Image from "next/image";
+import Cookies from "js-cookie";
+import { useEffect, useMemo, useState } from "react";
 
+import { Header } from "./user/component/header";
+import { Footer } from "./user/component/footer";
+import { Button } from "./auth/components/ui/button";
+import { useAuth } from "@/lib/contexts/auth-contexts";
+import { usePublicSettings } from "@/lib/api/hooks/usePublicSettings";
+
+const COOKIE_KEY = "krishipal_user";
+
+type CookieUser = { name?: string };
+
+// helpers
+function firstWord(s: string) {
+  return String(s || "").trim().split(/\s+/)[0] || "";
+}
+function getCookieUser(): CookieUser | null {
+  const raw = Cookies.get(COOKIE_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as CookieUser;
+  } catch {
+    return null;
+  }
+}
+function applyTemplate(tpl: string, vars: Record<string, string>): string {
+  return tpl.replace(/\{(\w+)\}/g, (_, key) => vars[key] ?? "");
+}
 
 export default function HomePage() {
+  const { user } = useAuth();
+  const settings: any = usePublicSettings();
+
+  // store name from settings
+  const storeName =
+    String(settings?.storeName || "KrishiPal").trim() || "KrishiPal";
+
+  // cookie user.name (token)
+  const [cookieName, setCookieName] = useState("");
+
+  useEffect(() => {
+    const cu = getCookieUser();
+    setCookieName(String(cu?.name || "").trim());
+  }, [user?.email]);
+
+  // if logged in -> first name, else -> store name
+  const displayName = cookieName ? firstWord(cookieName) : storeName;
+
+  // ✅ BIG greeting (admin can control template if you want)
+  const greetingTpl = String(
+    settings?.homeHeroGreetingTemplate || "Namaste, {name}"
+  ).trim();
+
+  const greetingText = useMemo(() => {
+    return applyTemplate(greetingTpl, {
+      name: displayName,
+      storeName,
+    });
+  }, [greetingTpl, displayName, storeName]);
+
+  // ✅ SMALL description (admin controlled)
+  const descTpl = String(
+    settings?.homeHeroHeadline ||
+      "Smarter seeds, bigger harvests, {storeName} guides your farm to success."
+  ).trim();
+
+  const smallDesc = useMemo(() => {
+    return applyTemplate(descTpl, {
+      name: displayName,
+      storeName,
+    });
+  }, [descTpl, displayName, storeName]);
+
+  const heroCtaText =
+    String(settings?.homeHeroCtaText || "Explore").trim() || "Explore";
+
+  const heroImage =
+    String(
+      settings?.homeHeroImage ||
+        "/images/green-plant-sprouting-from-tree-bark.png"
+    ).trim() || "/images/green-plant-sprouting-from-tree-bark.png";
+
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
@@ -17,18 +95,25 @@ export default function HomePage() {
           <div className="container mx-auto px-4">
             <div className="grid md:grid-cols-2 gap-12 items-center">
               <div>
-                <h2 className="text-lg mb-4 text-green-100">Namaste, KrishiPal.</h2>
-                <h1 className="text-4xl md:text-5xl font-bold mb-6 text-balance">
-                  Smarter seeds, bigger harvests  KrishiPal guides your farm to success.
+                {/* ✅ BIG greeting (same size as big text) */}
+                <h1 className="text-4xl md:text-5xl font-bold leading-tight text-white">
+                  {greetingText}
                 </h1>
+
+                {/* ✅ SMALL description */}
+                <p className="mt-4 text-sm md:text-base text-green-100 max-w-xl">
+                  {smallDesc}
+                </p>
+
                 <Link href="/shop">
-                  <Button className="bg-green-500 hover:bg-green-400 text-white px-8 py-6 text-lg rounded-full">
-                    Explore
+                  <Button className="mt-7 bg-green-500 hover:bg-green-400 text-white px-8 py-6 text-lg rounded-full">
+                    {heroCtaText}
                   </Button>
                 </Link>
               </div>
+
               <div className="relative h-[400px] rounded-2xl overflow-hidden shadow-2xl">
-                <Image src="/images/green-plant-sprouting-from-tree-bark.png" alt="Plant growing on tree" fill className="object-cover" />
+                <Image src={heroImage} alt="Hero" fill className="object-cover" />
               </div>
             </div>
           </div>
@@ -40,15 +125,31 @@ export default function HomePage() {
             <div className="grid md:grid-cols-4 gap-8">
               <div className="text-center">
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  <svg
+                    className="w-8 h-8 text-green-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 13l4 4L19 7"
+                    />
                   </svg>
                 </div>
                 <h3 className="font-semibold mb-2">Free Shipping</h3>
               </div>
+
               <div className="text-center">
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg
+                    className="w-8 h-8 text-green-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -59,9 +160,15 @@ export default function HomePage() {
                 </div>
                 <h3 className="font-semibold mb-2">Best Price</h3>
               </div>
+
               <div className="text-center">
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg
+                    className="w-8 h-8 text-green-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -72,9 +179,15 @@ export default function HomePage() {
                 </div>
                 <h3 className="font-semibold mb-2">Free Curbside Pickup</h3>
               </div>
+
               <div className="text-center">
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg
+                    className="w-8 h-8 text-green-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -96,8 +209,10 @@ export default function HomePage() {
               <div className="grid md:grid-cols-2 gap-8 items-center">
                 <div>
                   <p className="text-green-400 mb-2">Hoyy!!</p>
-                  <h2 className="text-3xl font-bold mb-6">Signup to know more!</h2>
-                  <Link href="/signup">
+                  <h2 className="text-3xl font-bold mb-6">
+                    Signup to know more!
+                  </h2>
+                  <Link href="/auth/signup">
                     <Button
                       variant="outline"
                       className="bg-transparent border-white text-white hover:bg-white hover:text-slate-800 px-8 py-6 text-lg"
@@ -107,39 +222,31 @@ export default function HomePage() {
                   </Link>
                 </div>
                 <div className="relative h-[300px]">
-                  <Image src="/images/happy-farmer-with-vegetables-pumpkin-tomatoes-corn.png" alt="Farmer illustration" fill className="object-contain" />
+                  <Image
+                    src="/images/happy-farmer-with-vegetables-pumpkin-tomatoes-corn.png"
+                    alt="Farmer illustration"
+                    fill
+                    className="object-contain"
+                  />
                 </div>
               </div>
             </div>
           </div>
         </section>
 
-        {/* Error Message Section
-        <section className="py-8">
-          <div className="container mx-auto px-4">
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
-              <svg className="w-5 h-5 text-red-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              <p className="text-red-800 text-sm">Error! Please Reload the page</p>
-            </div>
-          </div>
-        </section> */}
-
         {/* Explore Button */}
         <section className="py-8 bg-gray-50">
           <div className="container mx-auto px-4 text-center">
-            <Button className="bg-green-600 hover:bg-green-700 text-white px-12 py-6 text-lg">Explore →</Button>
+            <Link href="/shop">
+              <Button className="bg-green-600 hover:bg-green-700 text-white px-12 py-6 text-lg">
+                Explore →
+              </Button>
+            </Link>
           </div>
         </section>
       </main>
 
       <Footer />
     </div>
-  )
+  );
 }

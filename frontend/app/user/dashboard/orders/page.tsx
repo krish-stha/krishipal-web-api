@@ -64,7 +64,6 @@ export default function MyOrdersPage() {
       <main className="flex-1">
         <div className="container mx-auto px-4 py-10">
           <div className="mb-6">
-            <div className="text-sm text-slate-500">Account / Orders</div>
             <h1 className="text-3xl font-bold text-slate-900">My Orders</h1>
             <p className="text-slate-600 mt-1">Track your orders and their status.</p>
           </div>

@@ -1,52 +1,41 @@
-"use client";
+// "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { verifyEsewaPayment } from "@/lib/api/payment";
+// import { useEffect, useRef, useState } from "react";
+// import { useRouter, useSearchParams } from "next/navigation";
+// import { verifyEsewaPayment } from "@/lib/api/payment"; // adjust path if yours differs
 
-export default function EsewaCallbackPage() {
-  const router = useRouter();
-  const sp = useSearchParams();
-  const ranRef = useRef(false);
+// export default function EsewaCallbackPage() {
+//   const router = useRouter();
+//   const sp = useSearchParams();
+//   const ran = useRef(false);
+//   const [msg, setMsg] = useState("Verifying payment...");
 
-  const [msg, setMsg] = useState("Preparing verification...");
+//   useEffect(() => {
+//     if (ran.current) return;
+//     ran.current = true;
 
-  useEffect(() => {
-    const orderId = sp.get("orderId") || "";
-    const data = sp.get("data") || "";
+//     const orderId = sp.get("orderId") || "";
+//     const data = sp.get("data") || "";
 
-    if (!orderId) return;
-    if (!data) {
-      setMsg("Missing eSewa data...");
-      router.replace(`/user/dashboard/orders/${orderId}?paid=0`);
-      return;
-    }
+//     console.log("CALLBACK PARAMS:", { orderId, data });
 
-    if (ranRef.current) return;
-    ranRef.current = true;
+//     if (!orderId || !data) {
+//       setMsg("Missing orderId/data");
+//       router.replace(`/user/dashboard/orders/${orderId}?paid=0`);
+//       return;
+//     }
 
-    (async () => {
-      try {
-        setMsg("Verifying payment with eSewa...");
-        await verifyEsewaPayment({ orderId, data });
+//     (async () => {
+//       try {
+//         const res = await verifyEsewaPayment({ orderId, data });
+//         console.log("VERIFY RESPONSE:", res.data);
+//         router.replace(`/user/dashboard/orders/${orderId}?paid=1`);
+//       } catch (e) {
+//         console.error("VERIFY FAILED:", e);
+//         router.replace(`/user/dashboard/orders/${orderId}?paid=0`);
+//       }
+//     })();
+//   }, [sp, router]);
 
-        setMsg("Payment verified ✅ Redirecting...");
-        router.replace(`/user/dashboard/orders/${orderId}?paid=1`);
-      } catch (e: any) {
-        const m = e?.response?.data?.message || e?.message || "Verification failed";
-        setMsg(m);
-        setTimeout(() => router.replace(`/user/dashboard/orders/${orderId}?paid=0`), 1200);
-      }
-    })();
-  }, [sp, router]);
-
-  return (
-    <div className="min-h-[60vh] flex items-center justify-center px-4">
-      <div className="max-w-lg w-full rounded-2xl border bg-white p-6 text-center">
-        <div className="text-xl font-semibold">eSewa Payment</div>
-        <p className="text-slate-600 mt-2">{msg}</p>
-        <p className="text-xs text-slate-400 mt-3">Please don’t close this tab.</p>
-      </div>
-    </div>
-  );
-}
+//   return <div style={{ padding: 24 }}>{msg}</div>;
+// }

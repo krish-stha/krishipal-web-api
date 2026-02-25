@@ -19,6 +19,10 @@ import {
   Trash2,
 } from "lucide-react";
 
+// ✅ ONLY UI: confirm dialog + toast
+import { ConfirmDialog } from "@/app/auth/components/ui/confirm-dialog";
+import { useToast } from "@/hooks/use-toast";
+
 type RoleFilter = "all" | "admin" | "user";
 type SortKey =
   | "created_desc"
@@ -90,6 +94,9 @@ type Meta = {
 };
 
 export default function AdminUsersPage() {
+  // ✅ ONLY UI: toast
+  const { toast } = useToast();
+
   const [users, setUsers] = useState<any[]>([]);
   const [meta, setMeta] = useState<Meta>({
     total: 0,
@@ -97,6 +104,10 @@ export default function AdminUsersPage() {
     limit: 10,
     totalPages: 1,
   });
+
+  // ✅ ONLY UI: confirm dialog state (replaces confirm/alert)
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -121,9 +132,9 @@ export default function AdminUsersPage() {
       const res = await adminListUsers({ page: p, limit: l });
 
       const list = Array.isArray(res.data) ? res.data : [];
-const m = res.meta ?? null;
+      const m = res.meta ?? null;
 
-setUsers(list);
+      setUsers(list);
 
       // backend meta exists when page/limit used
       if (m) {
@@ -289,9 +300,9 @@ setUsers(list);
     URL.revokeObjectURL(url);
   };
 
+  // ✅ SAME LOGIC AS BEFORE (only UI changed: no confirm/alert)
   const handleDeleteFromList = async (userId: string) => {
-    if (!confirm("Are you sure you want to delete this user?")) return;
-
+    setDeleteLoading(true);
     try {
       await adminSoftDeleteUser(userId);
 
@@ -304,9 +315,21 @@ setUsers(list);
         await fetchUsers(page, pageSize);
       }
 
-      alert("User deleted ✅");
+      toast({
+        title: "Deleted",
+        description: "User deleted ✅",
+        duration: 1400,
+      });
     } catch (e: any) {
-      alert(e?.response?.data?.message || e?.message || "Delete failed");
+      const msg = e?.response?.data?.message || e?.message || "Delete failed";
+      toast({
+        title: "Delete failed",
+        description: msg,
+        variant: "destructive",
+        duration: 1800,
+      });
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -567,11 +590,12 @@ setUsers(list);
                               Edit
                             </Link>
 
-                            {/* ✅ Professor requirement: delete button in table with confirm */}
+                            {/* ✅ delete opens ConfirmDialog (no browser confirm) */}
                             <button
-                              onClick={() => handleDeleteFromList(u._id)}
+                              onClick={() => setDeleteId(u._id)}
                               className="inline-flex items-center gap-1 font-medium text-red-600 hover:text-red-700"
                               title="Delete user"
+                              disabled={deleteLoading}
                             >
                               <Trash2 className="h-4 w-4" />
                               Delete
@@ -620,6 +644,27 @@ setUsers(list);
           </div>
         )}
       </div>
+
+      {/* ✅ Confirm dialog mounted once */}
+      <ConfirmDialog
+        open={!!deleteId}
+        onOpenChange={(v) => {
+          if (!v) setDeleteId(null);
+        }}
+        title="Are you sure you want to delete this user?"
+        description="This will soft-delete the user account."
+        cancelText="Cancel"
+        confirmText={deleteLoading ? "Deleting..." : "Delete"}
+        destructive
+        loading={deleteLoading}
+        onConfirm={async () => {
+          if (!deleteId) return;
+          const id = deleteId;
+          // keep same behavior as before, just no browser confirm/alert
+          await handleDeleteFromList(id);
+          setDeleteId(null);
+        }}
+      />
     </div>
   );
 }
