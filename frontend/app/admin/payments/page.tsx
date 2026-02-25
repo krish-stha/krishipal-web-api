@@ -10,11 +10,14 @@ import {
   adminRejectRefund,
   adminMarkRefundProcessed,
 } from "@/lib/api/admin/payment";
+import { useToast } from "@/hooks/use-toast";
+import { NoteDialog } from "@/app/auth/components/ui/alert-dialog";
 
 function rsFromPaisa(paisa: any) {
   const v = Number(paisa ?? 0);
   return `Rs. ${Number.isFinite(v) ? Math.round(v / 100) : 0}`;
 }
+
 
 export default function AdminPaymentsPage() {
   const [tab, setTab] = useState<"logs" | "refunds">("logs");
@@ -35,7 +38,27 @@ export default function AdminPaymentsPage() {
   const [rfRows, setRfRows] = useState<any[]>([]);
   const [rfTotal, setRfTotal] = useState(0);
 
+  //dialog
+  const { toast } = useToast();
+
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [noteMode, setNoteMode] = useState<"approve" | "reject">("approve");
+  const [targetRefund, setTargetRefund] = useState<any | null>(null);
+
+
   const limit = 20;
+
+    const openApprove = (r: any) => {
+    setTargetRefund(r);
+    setNoteMode("approve");
+    setNoteOpen(true);
+  };
+
+  const openReject = (r: any) => {
+    setTargetRefund(r);
+    setNoteMode("reject");
+    setNoteOpen(true);
+  };
 
   const loadLogs = async (p = logPage) => {
     setLogLoading(true);
@@ -85,6 +108,28 @@ export default function AdminPaymentsPage() {
 
   const logPages = Math.max(1, Math.ceil(logTotal / limit));
   const rfPages = Math.max(1, Math.ceil(rfTotal / limit));
+
+
+    const onConfirmNote = async (note: string) => {
+    if (!targetRefund) return;
+
+    try {
+      if (noteMode === "approve") {
+        await adminApproveRefund(targetRefund._id, note);
+        toast({ title: "Approved", description: "Refund request approved." });
+      } else {
+        await adminRejectRefund(targetRefund._id, note);
+        toast({ title: "Rejected", description: "Refund request rejected." });
+      }
+
+      setNoteOpen(false);
+      setTargetRefund(null);
+      await loadRefunds(rfPage);
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || e?.message || "Action failed";
+      toast({ title: "Failed", description: msg, variant: "destructive" });
+    }
+  };
 
   return (
     <div className="p-6">
@@ -304,21 +349,13 @@ export default function AdminPaymentsPage() {
                               <Button
                                 variant="outline"
                                 className="border-slate-300"
-                                onClick={async () => {
-                                  const note = prompt("Admin note (optional):") || "";
-                                  await adminApproveRefund(r._id, note);
-                                  loadRefunds(rfPage);
-                                }}
+                                onClick={() => openApprove(r)}
                               >
                                 Approve
                               </Button>
                               <Button
                                 className="bg-red-600 hover:bg-red-700 text-white"
-                                onClick={async () => {
-                                  const note = prompt("Reject reason (optional):") || "";
-                                  await adminRejectRefund(r._id, note);
-                                  loadRefunds(rfPage);
-                                }}
+                                onClick={() => openReject(r)}
                               >
                                 Reject
                               </Button>
@@ -329,9 +366,15 @@ export default function AdminPaymentsPage() {
                             <Button
                               className="bg-purple-600 hover:bg-purple-700 text-white"
                               onClick={async () => {
-                                await adminMarkRefundProcessed(r._id);
-                                loadRefunds(rfPage);
-                              }}
+  try {
+    await adminMarkRefundProcessed(r._id);
+    toast({ title: "Processed", description: "Refund marked as processed." });
+    loadRefunds(rfPage);
+  } catch (e: any) {
+    const msg = e?.response?.data?.message || e?.message || "Failed";
+    toast({ title: "Failed", description: msg, variant: "destructive" });
+  }
+}}
                             >
                               Mark Processed
                             </Button>
@@ -344,6 +387,24 @@ export default function AdminPaymentsPage() {
               </table>
             </div>
           </Card>
+
+          <NoteDialog
+  open={noteOpen}
+  onOpenChange={(v) => {
+    setNoteOpen(v);
+    if (!v) setTargetRefund(null);
+  }}
+  title={noteMode === "approve" ? "Approve refund?" : "Reject refund?"}
+  description={
+    targetRefund
+      ? `Order: ${String(targetRefund.order?._id || "-").slice(-10)} • Amount: ${rsFromPaisa(targetRefund.amountPaisa)}`
+      : ""
+  }
+  placeholder={noteMode === "approve" ? "Approval note (optional)..." : "Reason for rejection (optional)..."}
+  confirmText={noteMode === "approve" ? "Approve" : "Reject"}
+  destructive={noteMode === "reject"}
+  onConfirm={onConfirmNote}
+/>
 
           <div className="mt-5 flex items-center justify-between">
             <Button

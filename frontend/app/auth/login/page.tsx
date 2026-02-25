@@ -48,10 +48,20 @@ const searchParams = useSearchParams()
 
       // Redirect handled in AuthContext
     } catch (err: any) {
-      setErrors({ general: err.message || "Invalid credentials. Please try again." })
-    } finally {
-      setIsLoading(false)
-    }
+  const status = err?.response?.status;
+
+  // friendly messages
+  const msg =
+    status === 401
+      ? "Email or password is incorrect."
+      : err?.response?.data?.message ||
+        err?.message ||
+        "Login failed. Please try again.";
+
+  setErrors({ general: msg });
+} finally {
+  setIsLoading(false);
+}
   }
 
   return (
@@ -85,7 +95,11 @@ const searchParams = useSearchParams()
           </h1>
           <p className="text-gray-600 mb-8">Login to manage your account</p>
 
-          {errors.general && <p className="text-red-600 text-sm mb-4">{errors.general}</p>}
+          {errors.general && (
+  <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+    {errors.general}
+  </div>
+)}
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
@@ -115,9 +129,7 @@ const searchParams = useSearchParams()
                 }}
                 required
               />
-              {errors.password && (
-                <p className="text-red-600 text-sm mt-2 absolute -bottom-6 left-0">{errors.password}</p>
-              )}
+              
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
@@ -126,6 +138,11 @@ const searchParams = useSearchParams()
                 {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </button>
             </div>
+            <div className="text-right">
+  <Link href="/auth/forgot-password" className="text-green-600 hover:underline text-sm font-medium">
+    Forgot password?
+  </Link>
+</div>
 
             <Button
               type="submit"
@@ -139,11 +156,7 @@ const searchParams = useSearchParams()
               <span className="text-gray-500">or</span>
             </div>
 
-           <div className="text-right">
-  <Link href="/auth/forgot-password" className="text-green-600 hover:underline text-sm font-medium">
-    Forgot password?
-  </Link>
-</div>
+           
 
           </form>
 

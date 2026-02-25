@@ -9,6 +9,9 @@ import { api } from "@/lib/api/axios";
 import { endpoints } from "@/lib/api/endpoints";
 import { Camera, Loader2, Trash2 } from "lucide-react";
 
+// ✅ ONLY UI: toast (no logic change)
+import { useToast } from "@/hooks/use-toast";
+
 type CookieUser = {
   id?: string;
   _id?: string;
@@ -55,8 +58,10 @@ function normalizePhotoUrl(photo: string | null): string | null {
   if (photo.startsWith("public/")) return `${BACKEND_URL}/${photo}`;
   if (photo.startsWith("/public/")) return `${BACKEND_URL}${photo}`;
 
-  if (photo.startsWith("profile_photo/")) return `${BACKEND_URL}/public/${photo}`;
-  if (photo.startsWith("/profile_photo/")) return `${BACKEND_URL}/public${photo}`;
+  if (photo.startsWith("profile_photo/"))
+    return `${BACKEND_URL}/public/${photo}`;
+  if (photo.startsWith("/profile_photo/"))
+    return `${BACKEND_URL}/public${photo}`;
 
   if (!photo.startsWith("/")) return `${BACKEND_URL}/${photo}`;
   return `${BACKEND_URL}${photo}`;
@@ -88,6 +93,9 @@ function initials(name?: string, email?: string) {
 }
 
 export default function UserProfilePanel() {
+  // ✅ ONLY UI: toast
+  const { toast } = useToast();
+
   const { user } = useAuth();
 
   const [form, setForm] = useState({
@@ -189,11 +197,16 @@ export default function UserProfilePanel() {
         id: updated?.id || current?.id,
         role: updated?.role || current?.role,
 
-        name: updated?.fullName || updated?.name || form.fullName || current?.name,
+        name:
+          updated?.fullName ||
+          updated?.name ||
+          form.fullName ||
+          current?.name,
         fullName: updated?.fullName || form.fullName || current?.fullName,
         email: updated?.email || form.email || current?.email,
 
-        countryCode: updated?.countryCode || form.countryCode || current?.countryCode,
+        countryCode:
+          updated?.countryCode || form.countryCode || current?.countryCode,
         phone: updated?.phone || form.phone || current?.phone,
         address: updated?.address || form.address || current?.address,
 
@@ -210,9 +223,25 @@ export default function UserProfilePanel() {
       window.dispatchEvent(new Event(PROFILE_CLOSE_EVENT));
 
       clearSelectedPhoto();
-      alert("Profile updated ✅");
+
+      // ✅ ONLY UI: toast
+      toast({
+        title: "Updated",
+        description: "Profile updated successfully",
+        duration: 1400,
+      });
     } catch (e: any) {
-      alert(e?.response?.data?.message || e?.message || "Update failed");
+      const m = e?.response?.data?.message || e?.message || "Update failed";
+
+      // keep existing behavior (alert) + add toast only UI
+      alert(m);
+
+      toast({
+        title: "Update failed",
+        description: m,
+        variant: "destructive",
+        duration: 1800,
+      });
     } finally {
       setLoading(false);
     }
@@ -223,11 +252,7 @@ export default function UserProfilePanel() {
       <div className="flex items-center gap-4">
         <div className="relative h-14 w-14 overflow-hidden rounded-full ring-2 ring-green-100 bg-slate-100 flex items-center justify-center">
           {avatarSrc ? (
-            <img
-              src={avatarSrc}
-              alt="Profile"
-              className="h-full w-full object-cover"
-            />
+            <img src={avatarSrc} alt="Profile" className="h-full w-full object-cover" />
           ) : (
             <span className="font-semibold text-slate-700">{initial}</span>
           )}

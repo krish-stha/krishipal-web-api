@@ -13,6 +13,9 @@ import {
 
 import { adminListCategories } from "@/lib/api/admin/category";
 
+import { useToast } from "@/hooks/use-toast";
+import { ConfirmDialog } from "@/app/auth/components/ui/confirm-dialog";
+
 type Category = { _id: string; name: string; slug?: string };
 
 type Product = {
@@ -54,6 +57,8 @@ function normalizeSku(s: string) {
 }
 
 export default function AdminItemsPage() {
+  const { toast } = useToast();
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -94,6 +99,9 @@ export default function AdminItemsPage() {
   const [eCategoryId, setECategoryId] = useState("");
   const [eDescription, setEDescription] = useState("");
   const [eFiles, setEFiles] = useState<FileList | null>(null);
+
+  // ✅ confirm dialog state (ONLY for delete)
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const fetchAll = async (p = page, l = limit, s = search) => {
     setLoading(true);
@@ -169,6 +177,8 @@ export default function AdminItemsPage() {
     try {
       await adminCreateProduct(fd);
 
+      toast({ title: "Created", description: "Product created successfully", duration: 1200 });
+
       // reset
       setName("");
       setSku("");
@@ -181,7 +191,9 @@ export default function AdminItemsPage() {
 
       await fetchAll(page, limit, search);
     } catch (e: any) {
-      setError(e?.response?.data?.message || e?.message || "Create failed");
+      const msg = e?.response?.data?.message || e?.message || "Create failed";
+      setError(msg);
+      toast({ title: "Create failed", description: msg, variant: "destructive", duration: 1600 });
     } finally {
       setLoading(false);
     }
@@ -242,23 +254,33 @@ export default function AdminItemsPage() {
     try {
       await adminUpdateProduct(editingId, fd);
       cancelEdit();
+
+      toast({ title: "Saved", description: "Product updated successfully", duration: 1200 });
+
       await fetchAll(page, limit, search);
     } catch (e: any) {
-      setError(e?.response?.data?.message || e?.message || "Update failed");
+      const msg = e?.response?.data?.message || e?.message || "Update failed";
+      setError(msg);
+      toast({ title: "Update failed", description: msg, variant: "destructive", duration: 1600 });
     } finally {
       setLoading(false);
     }
   };
 
+  // ✅ NO confirm() here anymore (dialog handles confirm)
   const remove = async (id: string) => {
-    if (!confirm("Delete this product?")) return;
     setLoading(true);
     setError("");
     try {
       await adminSoftDeleteProduct(id);
+
+      toast({ title: "Deleted", description: "Product deleted successfully", duration: 1200 });
+
       await fetchAll(page, limit, search);
     } catch (e: any) {
-      setError(e?.response?.data?.message || e?.message || "Delete failed");
+      const msg = e?.response?.data?.message || e?.message || "Delete failed";
+      setError(msg);
+      toast({ title: "Delete failed", description: msg, variant: "destructive", duration: 1600 });
     } finally {
       setLoading(false);
     }
@@ -331,7 +353,11 @@ export default function AdminItemsPage() {
 
             <div>
               <label className="text-sm font-medium">Status</label>
-              <select className="mt-1 border rounded-lg px-4 py-3 w-full" value={status} onChange={(e) => setStatus(e.target.value as any)}>
+              <select
+                className="mt-1 border rounded-lg px-4 py-3 w-full"
+                value={status}
+                onChange={(e) => setStatus(e.target.value as any)}
+              >
                 <option value="active">Active (visible)</option>
                 <option value="draft">Draft (hidden)</option>
               </select>
@@ -341,7 +367,11 @@ export default function AdminItemsPage() {
           <div className="grid md:grid-cols-2 gap-3">
             <div>
               <label className="text-sm font-medium">Category</label>
-              <select className="mt-1 border rounded-lg px-4 py-3 w-full" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+              <select
+                className="mt-1 border rounded-lg px-4 py-3 w-full"
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+              >
                 <option value="">Select category</option>
                 {categories.map((c) => (
                   <option key={c._id} value={c._id}>
@@ -409,9 +439,7 @@ export default function AdminItemsPage() {
               ))}
             </select>
 
-            <div className="ml-2 text-sm text-gray-600">
-              {meta.total ? `Total: ${meta.total}` : null}
-            </div>
+            <div className="ml-2 text-sm text-gray-600">{meta.total ? `Total: ${meta.total}` : null}</div>
           </div>
         </CardContent>
       </Card>
@@ -480,12 +508,7 @@ export default function AdminItemsPage() {
 
                       <td className="p-4">
                         {isEdit ? (
-                          <input
-                            className="border rounded-md px-3 py-2 w-full"
-                            inputMode="numeric"
-                            value={ePriceStr}
-                            onChange={(e) => setEPriceStr(e.target.value)}
-                          />
+                          <input className="border rounded-md px-3 py-2 w-full" inputMode="numeric" value={ePriceStr} onChange={(e) => setEPriceStr(e.target.value)} />
                         ) : (
                           <span>Rs. {Number(p.price || 0)}</span>
                         )}
@@ -493,12 +516,7 @@ export default function AdminItemsPage() {
 
                       <td className="p-4">
                         {isEdit ? (
-                          <input
-                            className="border rounded-md px-3 py-2 w-full"
-                            inputMode="numeric"
-                            value={eStockStr}
-                            onChange={(e) => setEStockStr(e.target.value)}
-                          />
+                          <input className="border rounded-md px-3 py-2 w-full" inputMode="numeric" value={eStockStr} onChange={(e) => setEStockStr(e.target.value)} />
                         ) : (
                           <span className={p.stock <= 5 ? "font-semibold text-red-600" : ""}>{Number(p.stock || 0)}</span>
                         )}
@@ -536,10 +554,12 @@ export default function AdminItemsPage() {
                               <Button variant="outline" onClick={() => startEdit(p)} disabled={loading}>
                                 Edit
                               </Button>
+
+                              {/* ✅ NOW opens ConfirmDialog instead of window.confirm */}
                               <Button
                                 variant="outline"
                                 className="border-red-500 text-red-600 hover:bg-red-50"
-                                onClick={() => remove(p._id)}
+                                onClick={() => setDeleteId(p._id)}
                                 disabled={loading}
                               >
                                 Delete
@@ -574,24 +594,35 @@ export default function AdminItemsPage() {
             </div>
 
             <div className="flex gap-2">
-              <Button
-                variant="outline"
-                disabled={loading || !meta.hasPrevPage}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
+              <Button variant="outline" disabled={loading || !meta.hasPrevPage} onClick={() => setPage((p) => Math.max(1, p - 1))}>
                 Prev
               </Button>
-              <Button
-                variant="outline"
-                disabled={loading || !meta.hasNextPage}
-                onClick={() => setPage((p) => p + 1)}
-              >
+              <Button variant="outline" disabled={loading || !meta.hasNextPage} onClick={() => setPage((p) => p + 1)}>
                 Next
               </Button>
             </div>
           </div>
         </CardContent>
       </Card>
+
+      {/* ✅ Confirm dialog mounted once */}
+      <ConfirmDialog
+        open={!!deleteId}
+        onOpenChange={(v) => {
+          if (!v) setDeleteId(null);
+        }}
+        title="Delete this product?"
+        description="This action cannot be undone."
+        confirmText={loading ? "Deleting..." : "Delete"}
+        cancelText="Cancel"
+        destructive
+        loading={loading}
+        onConfirm={async () => {
+          if (!deleteId) return;
+          await remove(deleteId);
+          setDeleteId(null);
+        }}
+      />
     </div>
   );
 }

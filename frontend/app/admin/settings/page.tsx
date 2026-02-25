@@ -9,12 +9,18 @@ import {
   adminUploadLogo,
 } from "@/lib/api/admin/settings";
 
+// ✅ ONLY UI: toast (no logic change)
+import { useToast } from "@/hooks/use-toast";
+
 function num(v: any, fallback = 0) {
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
 }
 
 export default function AdminSettingsPage() {
+  // ✅ ONLY UI: toast
+  const { toast } = useToast();
+
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
@@ -57,10 +63,25 @@ export default function AdminSettingsPage() {
 
       // bust logo cache when settings refreshed
       setLogoBust(Date.now());
+
+      // ✅ ONLY UI: toast
+      toast({
+        title: "Refreshed",
+        description: "Settings loaded successfully",
+        duration: 1200,
+      });
     } catch (e: any) {
-      setErr(
-        e?.response?.data?.message || e?.message || "Failed to load settings"
-      );
+      const m =
+        e?.response?.data?.message || e?.message || "Failed to load settings";
+      setErr(m);
+
+      // ✅ ONLY UI: toast
+      toast({
+        title: "Load failed",
+        description: m,
+        variant: "destructive",
+        duration: 1800,
+      });
     } finally {
       setLoading(false);
     }
@@ -104,6 +125,15 @@ export default function AdminSettingsPage() {
       if (enabledCount === 0) {
         setErr("At least one payment method must be enabled.");
         setLoading(false);
+
+        // ✅ ONLY UI: toast
+        toast({
+          title: "Validation error",
+          description: "At least one payment method must be enabled.",
+          variant: "destructive",
+          duration: 1800,
+        });
+
         return;
       }
 
@@ -119,10 +149,25 @@ export default function AdminSettingsPage() {
       }));
 
       setMsg("Settings saved ✅");
+
+      // ✅ ONLY UI: toast
+      toast({
+        title: "Saved",
+        description: "Settings saved successfully",
+        duration: 1400,
+      });
     } catch (e: any) {
-      setErr(
-        e?.response?.data?.message || e?.message || "Failed to save settings"
-      );
+      const m =
+        e?.response?.data?.message || e?.message || "Failed to save settings";
+      setErr(m);
+
+      // ✅ ONLY UI: toast
+      toast({
+        title: "Save failed",
+        description: m,
+        variant: "destructive",
+        duration: 1800,
+      });
     } finally {
       setLoading(false);
     }
@@ -242,12 +287,27 @@ export default function AdminSettingsPage() {
                         setLogoBust(Date.now());
 
                         setMsg("Logo uploaded ✅");
+
+                        // ✅ ONLY UI: toast
+                        toast({
+                          title: "Uploaded",
+                          description: "Logo uploaded successfully",
+                          duration: 1400,
+                        });
                       } catch (ex: any) {
-                        setErr(
+                        const m =
                           ex?.response?.data?.message ||
-                            ex?.message ||
-                            "Logo upload failed"
-                        );
+                          ex?.message ||
+                          "Logo upload failed";
+                        setErr(m);
+
+                        // ✅ ONLY UI: toast
+                        toast({
+                          title: "Upload failed",
+                          description: m,
+                          variant: "destructive",
+                          duration: 1800,
+                        });
                       } finally {
                         setLoading(false);
                         e.target.value = "";
@@ -269,7 +329,10 @@ export default function AdminSettingsPage() {
                 <textarea
                   value={form.storeAddress || ""}
                   onChange={(e) =>
-                    setForm((p: any) => ({ ...p, storeAddress: e.target.value }))
+                    setForm((p: any) => ({
+                      ...p,
+                      storeAddress: e.target.value,
+                    }))
                   }
                   className="w-full min-h-[90px] rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-4 focus:ring-emerald-100 focus:border-emerald-300"
                 />

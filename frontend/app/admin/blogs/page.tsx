@@ -11,6 +11,11 @@ import {
   AdminBlogStatus,
   adminGetBlogById,
 } from "@/lib/api/admin/blog";
+import { useToast } from "@/hooks/use-toast";
+import { ConfirmDialog } from "@/app/auth/components/ui/confirm-dialog";
+
+
+
 
 type Blog = {
   _id: string;
@@ -40,6 +45,8 @@ function StatusBadge({ status }: { status: AdminBlogStatus }) {
 }
 
 export default function AdminBlogsPage() {
+const { toast } = useToast();
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -68,6 +75,8 @@ export default function AdminBlogsPage() {
   const [eContent, setEContent] = useState("");
   const [eStatus, setEStatus] = useState<AdminBlogStatus>("draft");
   const [eCover, setECover] = useState<File | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+const [deleteTitle, setDeleteTitle] = useState<string>("");
 
   const fetchAll = async (p = page, l = limit) => {
     setLoading(true);
@@ -121,6 +130,7 @@ export default function AdminBlogsPage() {
     setError("");
     try {
       await adminCreateBlog(fd);
+      toast({ title: "Saved", description: "Blog created successfully", variant: "success", duration: 1000 });
       setTitle("");
       setSlug("");
       setExcerpt("");
@@ -130,7 +140,9 @@ export default function AdminBlogsPage() {
       await fetchAll(1, limit);
       setPage(1);
     } catch (e: any) {
-      setError(e?.response?.data?.message || e?.message || "Create failed");
+      const msg = e?.response?.data?.message || e?.message || "Create failed";
+      setError(msg);
+      toast({ title: "Failed", description: "Please try again", variant: "destructive",duration:1000 });
     } finally {
       setLoading(false);
     }
@@ -142,6 +154,11 @@ export default function AdminBlogsPage() {
   try {
     const res = await adminGetBlogById(b._id);
     const full = res?.data?.data; // { success:true, data: blog }
+
+    toast({
+    title: "Success",
+    description: "Fetched Sucessfully",
+  });
 
     setEditingId(full._id);
     setETitle(full.title || "");
@@ -195,22 +212,29 @@ export default function AdminBlogsPage() {
     }
   };
 
-  const onDelete = async (id: string) => {
-    if (!confirm("Delete this blog post?")) return;
-    setLoading(true);
-    setError("");
-    try {
-      await adminDeleteBlog(id);
-      // if last item on page deleted, go back a page
-      const nextPage = page > 1 && rows.length === 1 ? page - 1 : page;
-      setPage(nextPage);
-      await fetchAll(nextPage, limit);
-    } catch (e: any) {
-      setError(e?.response?.data?.message || e?.message || "Delete failed");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const onDelete = async () => {
+  if (!deleteId) return;
+
+  setLoading(true);
+  setError("");
+  try {
+    await adminDeleteBlog(deleteId);
+
+    toast({ title: "Deleted", description: "Blog post removed", variant: "success" });
+
+    const nextPage = page > 1 && rows.length === 1 ? page - 1 : page;
+    setPage(nextPage);
+    await fetchAll(nextPage, limit);
+  } catch (e: any) {
+    const msg = e?.response?.data?.message || e?.message || "Delete failed";
+    setError(msg);
+    toast({ title: "Delete failed", description: msg, variant: "destructive" });
+  } finally {
+    setLoading(false);
+    setDeleteId(null);
+    setDeleteTitle("");
+  }
+};
 
   const applyFilters = async () => {
     setPage(1);
@@ -502,16 +526,21 @@ export default function AdminBlogsPage() {
                                   Edit
                                 </Button>
                                 <Button
-                                  variant="outline"
-                                  className="border-red-500 text-red-600 hover:bg-red-50"
-                                  disabled={loading}
-                                  onClick={() => onDelete(b._id)}
-                                >
-                                  Delete
-                                </Button>
+  variant="outline"
+  className="border-red-500 text-red-600 hover:bg-red-50"
+  disabled={loading}
+  onClick={() => {
+    setDeleteId(b._id);
+    setDeleteTitle(b.title);
+  }}
+>
+  Delete
+</Button>
                               </>
                             )}
                           </div>
+
+                          
 
                           {isEdit ? (
                             <div className="mt-3 space-y-2">
@@ -557,6 +586,22 @@ export default function AdminBlogsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <ConfirmDialog
+  open={!!deleteId}
+  onOpenChange={(v) => {
+    if (!v) {
+      setDeleteId(null);
+      setDeleteTitle("");
+    }
+  }}
+  title="Delete blog post?"
+  description={`This will permanently delete “${deleteTitle || "this post"}”.`}
+  confirmText={loading ? "Deleting..." : "Delete"}
+  cancelText="Cancel"
+  destructive
+  onConfirm={onDelete}
+/>
     </div>
   );
 }

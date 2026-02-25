@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react"; // ✅ add useRef
 import { Header } from "@/app/user/component/header";
 import { Footer } from "@/app/user/component/footer";
 import { Button } from "@/app/auth/components/ui/button";
@@ -12,6 +12,8 @@ import { getPublicSettings } from "@/lib/api/settings";
 import { getPublicProductBySlug } from "@/lib/api/public/products";
 import { useAuth } from "@/lib/contexts/auth-contexts";
 import { usePathname } from "next/navigation";
+import { ConfirmDialog } from "@/app/auth/components/ui/confirm-dialog";
+
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
 
@@ -25,19 +27,81 @@ function money(n: any) {
   return `Rs. ${Number.isFinite(v) ? v : 0}`;
 }
 
+// ✅ Fly-to-cart animation (DOM only)
+function flyToCart(fromEl: HTMLElement | null) {
+  try {
+    const cartEl = document.getElementById("cart-icon");
+    if (!fromEl || !cartEl) return;
+
+    const from = fromEl.getBoundingClientRect();
+    const to = cartEl.getBoundingClientRect();
+
+    const clone = fromEl.cloneNode(true) as HTMLElement;
+
+    clone.style.objectFit = "cover";
+    clone.style.position = "fixed";
+    clone.style.left = `${from.left}px`;
+    clone.style.top = `${from.top}px`;
+    clone.style.width = `${from.width}px`;
+    clone.style.height = `${from.height}px`;
+    clone.style.zIndex = "9999";
+    clone.style.pointerEvents = "none";
+    clone.style.borderRadius = "16px";
+    clone.style.boxShadow = "0 10px 30px rgba(0,0,0,0.15)";
+    clone.style.transform = "translate3d(0,0,0) scale(1)";
+    clone.style.opacity = "1";
+    clone.style.transition =
+      "transform 700ms cubic-bezier(0.22, 1, 0.36, 1), opacity 700ms ease";
+
+    document.body.appendChild(clone);
+
+    const toX = to.left + to.width / 2;
+    const toY = to.top + to.height / 2;
+    const fromX = from.left + from.width / 2;
+    const fromY = from.top + from.height / 2;
+
+    const dx = toX - fromX;
+    const dy = toY - fromY;
+
+    requestAnimationFrame(() => {
+      clone.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(0.15)`;
+      clone.style.opacity = "0.25";
+    });
+
+    setTimeout(() => {
+      cartEl.animate(
+        [
+          { transform: "scale(1)" },
+          { transform: "scale(1.12)" },
+          { transform: "scale(1)" },
+        ],
+        { duration: 260, easing: "ease-out" }
+      );
+    }, 520);
+
+    const cleanup = () => {
+      if (clone && clone.parentNode) clone.parentNode.removeChild(clone);
+    };
+    clone.addEventListener("transitionend", cleanup, { once: true });
+    setTimeout(cleanup, 900);
+  } catch {
+    // ignore
+  }
+}
+
 export default function ShopProductDetailPage() {
   const router = useRouter();
   const params = useParams<{ slug: string }>();
   const slug = String(params?.slug || "");
-
+  const [loginOpen, setLoginOpen] = useState(false);
+  
 
   const { user } = useAuth();
-const pathname = usePathname();
+  const pathname = usePathname();
 
-const requireLogin = () => {
+  const requireLogin = () => {
   if (user) return true;
-  const ok = window.confirm("Need to login first to continue. Go to login?");
-  if (ok) router.push(`/auth/login?next=${encodeURIComponent(pathname)}`);
+  setLoginOpen(true);
   return false;
 };
 
@@ -50,7 +114,9 @@ const requireLogin = () => {
   const [settings, setSettings] = useState<any>(null);
   const [qty, setQty] = useState(1);
 
-  // ✅ fetch product
+  // ✅ ref for animation source (main image)
+  const imgRef = useRef<HTMLImageElement | null>(null);
+
   useEffect(() => {
     let alive = true;
 
@@ -80,7 +146,6 @@ const requireLogin = () => {
     };
   }, [slug]);
 
-  // ✅ fetch settings
   useEffect(() => {
     (async () => {
       try {
@@ -105,38 +170,54 @@ const requireLogin = () => {
   const stock = Number(product?.stock ?? 0);
   const inStock = stock > 0;
 
-  // NOTE: your public settings is usually res.data.lowStockThreshold (or res.data.data.lowStockThreshold)
-  // if your API returns { success, data }, then settings is already that .data
   const lowStockThreshold = Number(settings?.lowStockThreshold ?? 5);
   const low = inStock && stock <= (Number.isFinite(lowStockThreshold) ? Math.max(1, lowStockThreshold) : 5);
 
   const onAddToCart = async () => {
-  setError("");
-  if (!requireLogin()) return;   // ✅ NEW
-  if (!product?._id) return setError("Product not found");
-  if (!inStock) return setError("Out of stock");
+    setError("");
+    if (!requireLogin()) return;
+    if (!product?._id) return setError("Product not found");
+    if (!inStock) return setError("Out of stock");
 
-  const q = Math.max(1, Math.min(stock, Number(qty || 1)));
-  await add(product._id, q);
-};
+    // ✅ animation first (no logic change)
+    flyToCart(imgRef.current);
 
-const onBuyNow = async () => {
-  setError("");
-  if (!requireLogin()) return;
-  if (!product?._id) return setError("Product not found");
-  if (!inStock) return setError("Out of stock");
+    const q = Math.max(1, Math.min(stock, Number(qty || 1)));
+    await add(product._id, q);
+  };
 
-  const pid = String(product._id);
+  const onBuyNow = async () => {
+    setError("");
+    if (!requireLogin()) return;
+    if (!product?._id) return setError("Product not found");
+    if (!inStock) return setError("Out of stock");
 
-  await add(pid, 1);
-  await refresh();        // ✅ important
-  selectOnly(pid);
-  router.push("/user/dashboard/checkout");
-};
+    // ✅ optional: also animate on buy now
+    flyToCart(imgRef.current);
+
+    const pid = String(product._id);
+
+    await add(pid, 1);
+    await refresh();
+    selectOnly(pid);
+    router.push("/user/dashboard/checkout");
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
       <Header />
+      <ConfirmDialog
+  open={loginOpen}
+  onOpenChange={setLoginOpen}
+  title="Login required"
+  description="You need to sign in to continue."
+  confirmText="Go to login"
+  cancelText="Not now"
+  onConfirm={() => {
+    setLoginOpen(false);
+    router.push(`/auth/login?next=${encodeURIComponent(pathname)}`);
+  }}
+/>
 
       <main className="flex-1">
         <div className="container mx-auto px-4 py-10">
@@ -182,6 +263,7 @@ const onBuyNow = async () => {
                 <Card className="rounded-2xl p-5">
                   <div className="relative w-full h-[380px] rounded-2xl overflow-hidden bg-slate-50">
                     <img
+                      ref={imgRef} // ✅ this is the source for animation
                       src={productImageUrl(firstImage)}
                       alt={product?.name}
                       className="h-full w-full object-contain"
@@ -192,11 +274,7 @@ const onBuyNow = async () => {
                     <div className="mt-4 grid grid-cols-5 gap-2">
                       {images.slice(0, 5).map((img: string, idx: number) => (
                         <div key={idx} className="relative h-16 rounded-xl border bg-white overflow-hidden">
-                          <img
-                            src={productImageUrl(img)}
-                            alt={`Image ${idx + 1}`}
-                            className="h-full w-full object-contain"
-                          />
+                          <img src={productImageUrl(img)} alt={`Image ${idx + 1}`} className="h-full w-full object-contain" />
                         </div>
                       ))}
                     </div>
@@ -262,37 +340,37 @@ const onBuyNow = async () => {
                   </div>
 
                   <div className="mt-5 space-y-3">
-  <Button
-    type="button"
-    variant="outline"
-    className="w-full h-12  border-2 border-slate-800 bg-white text-slate-900 font-extrabold tracking-wide hover:bg-slate-50"
-    disabled={!inStock}
-    onClick={onAddToCart}
-  >
-    ADD TO CART
-  </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full h-12 border-2 border-slate-800 bg-white text-slate-900 font-extrabold tracking-wide hover:bg-slate-50"
+                      disabled={!inStock}
+                      onClick={onAddToCart}
+                    >
+                      ADD TO CART
+                    </Button>
 
-  <Button
-    type="button"
-    className="w-full h-12 bg-green-800  hover:bg-green-800 text-white font-extrabold tracking-wide"
-    disabled={!inStock}
-    onClick={onBuyNow}
-  >
-    BUY IT NOW
-  </Button>
+                    <Button
+                      type="button"
+                      className="w-full h-12 bg-green-800 hover:bg-green-800 text-white font-extrabold tracking-wide"
+                      disabled={!inStock}
+                      onClick={onBuyNow}
+                    >
+                      BUY IT NOW
+                    </Button>
 
-  <Button
-  type="button"
-  variant="outline"
-  className="w-full h-11 border border-slate-800 bg-white text-slate-700 hover:bg-slate-50"
-  onClick={() => {
-    if (!requireLogin()) return;  // ✅ NEW
-    router.push("/user/dashboard/cart");
-  }}
->
-  Go to cart
-</Button>
-</div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full h-11 border border-slate-800 bg-white text-slate-700 hover:bg-slate-50"
+                      onClick={() => {
+                        if (!requireLogin()) return;
+                        router.push("/user/dashboard/cart");
+                      }}
+                    >
+                      Go to cart
+                    </Button>
+                  </div>
                 </Card>
 
                 <Card className="rounded-2xl p-6">

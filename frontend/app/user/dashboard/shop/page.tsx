@@ -13,6 +13,7 @@ import { useCart } from "@/lib/contexts/cart-context";
 import { listPublicCategories } from "@/lib/api/public/category";
 import { useAuth } from "@/lib/contexts/auth-contexts";
 import { getPublicSettings } from "@/lib/api/settings";
+import { ConfirmDialog } from "@/app/auth/components/ui/confirm-dialog";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
 
@@ -31,46 +32,110 @@ type Category = {
   slug: string;
 };
 
+// ✅ Fly-to-cart animation (DOM only, no backend logic)
+function flyToCart(fromEl: HTMLElement | null) {
+  try {
+    const cartEl = document.getElementById("cart-icon");
+    if (!fromEl || !cartEl) return;
+
+    const from = fromEl.getBoundingClientRect();
+    const to = cartEl.getBoundingClientRect();
+
+    const clone = fromEl.cloneNode(true) as HTMLElement;
+
+    // If it's an <img>, keep aspect
+    clone.style.objectFit = "cover";
+
+    // Start position
+    clone.style.position = "fixed";
+    clone.style.left = `${from.left}px`;
+    clone.style.top = `${from.top}px`;
+    clone.style.width = `${from.width}px`;
+    clone.style.height = `${from.height}px`;
+    clone.style.zIndex = "9999";
+    clone.style.pointerEvents = "none";
+    clone.style.borderRadius = "16px";
+    clone.style.boxShadow = "0 10px 30px rgba(0,0,0,0.15)";
+    clone.style.transform = "translate3d(0,0,0) scale(1)";
+    clone.style.opacity = "1";
+    clone.style.transition =
+      "transform 700ms cubic-bezier(0.22, 1, 0.36, 1), opacity 700ms ease";
+
+    document.body.appendChild(clone);
+
+    // Target center of cart icon
+    const toX = to.left + to.width / 2;
+    const toY = to.top + to.height / 2;
+
+    // Move clone to cart center
+    const fromX = from.left + from.width / 2;
+    const fromY = from.top + from.height / 2;
+
+    const dx = toX - fromX;
+    const dy = toY - fromY;
+
+    // Animate in next frame
+    requestAnimationFrame(() => {
+      clone.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(0.15)`;
+      clone.style.opacity = "0.25";
+    });
+
+    // Small cart "pop" feedback
+    setTimeout(() => {
+      cartEl.animate(
+        [
+          { transform: "scale(1)" },
+          { transform: "scale(1.12)" },
+          { transform: "scale(1)" },
+        ],
+        { duration: 260, easing: "ease-out" }
+      );
+    }, 520);
+
+    // Cleanup
+    const cleanup = () => {
+      if (clone && clone.parentNode) clone.parentNode.removeChild(clone);
+    };
+    clone.addEventListener("transitionend", cleanup, { once: true });
+    setTimeout(cleanup, 900);
+  } catch {
+    // ignore
+  }
+}
+
 export default function ShopPage() {
   const router = useRouter();
   const { add, selectOnly, refresh } = useCart();
   const { user } = useAuth();
   const pathname = usePathname();
+  const [loginOpen, setLoginOpen] = useState(false);
 
-
-  const requireLogin = () => {
+const requireLogin = () => {
   if (user) return true;
-  const ok = window.confirm("Need to login first to continue. Go to login?");
-  if (ok) router.push(`/auth/login?next=${encodeURIComponent(pathname)}`);
+  setLoginOpen(true);
   return false;
 };
 
-  // ✅ dynamic low stock threshold (from public settings)
   const [lowStockThreshold, setLowStockThreshold] = useState<number>(5);
 
-  // UI state
   const [loading, setLoading] = useState(false);
   const [catsLoading, setCatsLoading] = useState(false);
   const [error, setError] = useState<string>("");
 
-  // data
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
 
-  // filters
   const [search, setSearch] = useState("");
   const [selectedCategorySlug, setSelectedCategorySlug] = useState<string>("");
   const [sort, setSort] = useState<"newest" | "price_asc" | "price_desc">("newest");
   const [onlyInStock, setOnlyInStock] = useState(false);
 
-  // paging
   const [page, setPage] = useState(1);
   const limit = 12;
 
   const debounceRef = useRef<any>(null);
   const didMountRef = useRef(false);
 
-  // ✅ load low stock threshold once
   useEffect(() => {
     let alive = true;
 
@@ -90,7 +155,6 @@ export default function ShopPage() {
     };
   }, []);
 
-  // load categories
   useEffect(() => {
     let alive = true;
 
@@ -140,7 +204,6 @@ export default function ShopPage() {
     }
   };
 
-  // initial + realtime search (debounced) + filters
   useEffect(() => {
     if (!didMountRef.current) {
       didMountRef.current = true;
@@ -170,25 +233,36 @@ export default function ShopPage() {
   };
 
   const goProduct = (slug: string) => {
-  router.push(`/shop/${slug}`);
-};
+    router.push(`/shop/${slug}`);
+  };
 
   const buyNow = async (productId: string) => {
-  const pid = String(productId);
+    const pid = String(productId);
 
-  await add(pid, 1);
+    await add(pid, 1);
 
-    await refresh();        // ✅ important
-  selectOnly(pid);        // ✅ now cart has that item, so selection works
-  router.push("/user/dashboard/checkout");
-};
+    await refresh();
+    selectOnly(pid);
+    router.push("/user/dashboard/checkout");
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
       <Header />
+      <ConfirmDialog
+  open={loginOpen}
+  onOpenChange={setLoginOpen}
+  title="Login required"
+  description="You need to sign in to continue."
+  confirmText="Go to login"
+  cancelText="Not now"
+  onConfirm={() => {
+    setLoginOpen(false);
+    router.push(`/auth/login?next=${encodeURIComponent(pathname)}`);
+  }}
+/>
 
       <main className="flex-1">
-        {/* Header strip */}
         <section className="bg-white border-b">
           <div className="container mx-auto px-4 py-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -210,17 +284,16 @@ export default function ShopPage() {
                   )}
 
                   <Link href="/user/dashboard/cart">
-                  <Button
-  className="bg-green-600 hover:bg-green-700 text-white h-10 rounded-xl"
-  onClick={(e) => {
-    e.preventDefault();
-    if (!requireLogin()) return;
-    router.push("/user/dashboard/cart");
-  }}
->
-  View Cart
-</Button>
-                    
+                    <Button
+                      className="bg-green-600 hover:bg-green-700 text-white h-10 rounded-xl"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (!requireLogin()) return;
+                        router.push("/user/dashboard/cart");
+                      }}
+                    >
+                      View Cart
+                    </Button>
                   </Link>
                 </div>
               </div>
@@ -287,10 +360,8 @@ export default function ShopPage() {
           </div>
         </section>
 
-        {/* Marketplace layout */}
         <section className="container mx-auto px-4 py-8">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Sidebar */}
             <aside className="lg:col-span-3">
               <div className="sticky top-24">
                 <Card className="rounded-2xl p-5">
@@ -335,7 +406,6 @@ export default function ShopPage() {
               </div>
             </aside>
 
-            {/* Main */}
             <div className="lg:col-span-9">
               {error && (
                 <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -356,12 +426,14 @@ export default function ShopPage() {
                   const inStock = Number(p.stock ?? 0) > 0;
                   const low = inStock && Number(p.stock ?? 0) <= lowStockThreshold;
 
+                  // ✅ ref for animation start point
+                  const imgRef = React.createRef<HTMLImageElement>();
+
                   return (
                     <div
                       key={p._id}
                       className="group rounded-2xl border bg-white overflow-hidden shadow-sm hover:shadow-md transition"
                     >
-                      {/* ✅ Click card opens detail page */}
                       <div
                         role="button"
                         tabIndex={0}
@@ -373,6 +445,7 @@ export default function ShopPage() {
                       >
                         <div className="relative h-44 bg-slate-50 flex items-center justify-center overflow-hidden">
                           <img
+                            ref={imgRef}
                             src={productImageUrl(firstImage)}
                             alt={p.name}
                             className="h-full w-full object-contain group-hover:scale-[1.03] transition-transform"
@@ -408,13 +481,9 @@ export default function ShopPage() {
 
                           <div className="mt-2 flex items-center justify-between">
                             <div>
-                              <div className="text-green-700 font-extrabold text-sm">
-                                {money(displayPrice)}
-                              </div>
+                              <div className="text-green-700 font-extrabold text-sm">{money(displayPrice)}</div>
                               {hasDiscount && (
-                                <div className="text-[11px] text-slate-500 line-through">
-                                  {money(p.price)}
-                                </div>
+                                <div className="text-[11px] text-slate-500 line-through">{money(p.price)}</div>
                               )}
                             </div>
 
@@ -425,34 +494,38 @@ export default function ShopPage() {
                         </div>
                       </div>
 
-                      {/* ✅ Actions (stopPropagation so it doesn’t open details) */}
                       <div className="p-3 pt-0 grid grid-cols-1 gap-2">
- <Button
-  type="button"
-  className="flex-1 bg-white text-slate-900 border-2 border-slate-800 hover:bg-slate-50"
-  onClick={(e) => {
-    e.stopPropagation();
-    if (!requireLogin()) return;   // ✅ NEW
-    add(p._id, 1);
-  }}
-  disabled={!inStock}
->
-  Add to cart
-</Button>
+                        <Button
+                          type="button"
+                          className="flex-1 bg-white text-slate-900 border-2 border-slate-800 hover:bg-slate-50"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!requireLogin()) return;
 
-<Button
-  type="button"
-  className="flex-1 bg-green-700 hover:bg-green-800 text-white"
-  onClick={(e) => {
-    e.stopPropagation();
-    if (!requireLogin()) return;   // ✅ NEW
-    buyNow(p._id);
-  }}
-  disabled={!inStock}
->
-  Buy it now
-</Button>
-</div>
+                            // ✅ animation only (no backend change)
+                            flyToCart(imgRef.current);
+
+                            // ✅ original logic untouched
+                            add(p._id, 1);
+                          }}
+                          disabled={!inStock}
+                        >
+                          Add to cart
+                        </Button>
+
+                        <Button
+                          type="button"
+                          className="flex-1 bg-green-700 hover:bg-green-800 text-white"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!requireLogin()) return;
+                            buyNow(p._id);
+                          }}
+                          disabled={!inStock}
+                        >
+                          Buy it now
+                        </Button>
+                      </div>
                     </div>
                   );
                 })}

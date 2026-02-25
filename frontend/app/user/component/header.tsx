@@ -22,6 +22,9 @@ import UserProfilePanel from "../profile/UserProfilePanel";
 // ✅ use ONLY hook (remove getPublicSettings + manual useEffect)
 import { usePublicSettings } from "@/lib/api/hooks/usePublicSettings";
 
+// ✅ NEW: professional dialog
+import { ConfirmDialog } from "@/app/auth/components/ui/confirm-dialog";
+
 type CookieUser = {
   name?: string;
   email?: string;
@@ -135,6 +138,7 @@ export function Header() {
   const { user, isLoading, logout } = useAuth();
   const { count } = useCart();
   const router = useRouter();
+
   // ✅ control sheet open/close
   const [profileOpen, setProfileOpen] = useState(false);
 
@@ -142,21 +146,23 @@ export function Header() {
   const [cookieEmail, setCookieEmail] = useState("");
   const [cookiePhoto, setCookiePhoto] = useState<string | null>(null);
 
+  // ✅ NEW: login dialog open/close
+  const [loginOpen, setLoginOpen] = useState(false);
+
   // ✅ public settings (store name/logo)
   const settings: any = usePublicSettings();
-  const storeName = String(settings?.storeName || "KrishiPal").trim() || "KrishiPal";
+  const storeName =
+    String(settings?.storeName || "KrishiPal").trim() || "KrishiPal";
 
   // if you store logo in settings (ex: "/images/krishipal_logo.png" OR full URL)
-  // IMPORTANT: if it's remote, Next/Image might require next.config. Using unoptimized fixes quickly.
   const storeLogo = resolveStoreLogo(settings?.storeLogo);
 
+  // ✅ replaced window.confirm with dialog
   const onCartClick = (e: React.MouseEvent) => {
-  if (user) return; // logged in -> allow navigation
-  e.preventDefault();
-
-  const ok = window.confirm("Need to login first to view cart. Go to login?");
-  if (ok) router.push("/auth/login");
-};
+    if (user) return; // logged in -> allow navigation
+    e.preventDefault();
+    setLoginOpen(true);
+  };
 
   const syncFromCookie = () => {
     const cu = getCookieUser();
@@ -190,6 +196,22 @@ export function Header() {
 
   return (
     <header className="border-b bg-white sticky top-0 z-50 shadow-sm">
+      {/* ✅ NEW: professional login modal (replaces window.confirm) */}
+      <ConfirmDialog
+        open={loginOpen}
+        onOpenChange={setLoginOpen}
+        title="Login required"
+        description="You need to sign in to view your cart."
+        confirmText="Go to login"
+        cancelText="Not now"
+        onConfirm={() => {
+          setLoginOpen(false);
+          router.push(
+            `/auth/login?next=${encodeURIComponent("/user/dashboard/cart")}`
+          );
+        }}
+      />
+
       <div className="container mx-auto px-4 py-4 flex items-center justify-between">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-3">
@@ -203,9 +225,7 @@ export function Header() {
           />
 
           {/* ✅ company name from settings */}
-          <div className="text-2xl font-bold text-green-700">
-            {storeName}
-          </div>
+          <div className="text-2xl font-bold text-green-700">{storeName}</div>
         </Link>
 
         {/* Navigation Links */}
@@ -213,28 +233,16 @@ export function Header() {
           <Link href="/" className="text-gray-700 hover:text-green-600">
             Home
           </Link>
-          <Link
-            href="/about"
-            className="text-gray-700 hover:text-green-600"
-          >
+          <Link href="/about" className="text-gray-700 hover:text-green-600">
             About
           </Link>
-          <Link
-            href="/blogs"
-            className="text-gray-700 hover:text-green-600"
-          >
+          <Link href="/blogs" className="text-gray-700 hover:text-green-600">
             Blogs
           </Link>
-          <Link
-            href="/contact"
-            className="text-gray-700 hover:text-green-600"
-          >
+          <Link href="/contact" className="text-gray-700 hover:text-green-600">
             Contact
           </Link>
-          <Link
-            href="/shop"
-            className="text-gray-700 hover:text-green-600"
-          >
+          <Link href="/shop" className="text-gray-700 hover:text-green-600">
             Shop
           </Link>
 
@@ -259,12 +267,17 @@ export function Header() {
 
         {/* Cart + Profile */}
         <div className="flex items-center gap-4">
-          <Link href="/user/dashboard/cart" className="relative" onClick={onCartClick}>
-  <ShoppingCart className="h-6 w-6 text-gray-700" />
-  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-    {count}
-  </span>
-</Link>
+          <Link
+            href="/user/dashboard/cart"
+            className="relative"
+            id="cart-icon"
+            onClick={onCartClick}
+          >
+            <ShoppingCart className="h-6 w-6 text-gray-700" />
+            <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+              {count}
+            </span>
+          </Link>
 
           {!isLoading && user && (
             <Sheet open={profileOpen} onOpenChange={setProfileOpen}>

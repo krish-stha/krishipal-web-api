@@ -13,7 +13,9 @@ import { getPublicSettings } from "@/lib/api/settings";
 
 // ✅ you already have this
 import { requestRefund, getMyRefunds } from "@/lib/api/refund";
-// if you DON'T have getMyRefunds yet, comment it and refunds UI will still work without crashing.
+
+// ✅ Professional modal
+import { NoteDialog } from "@/app/auth/components/ui/alert-dialog";
 
 type PaymentMethod = "COD" | "KHALTI" | "ESEWA";
 
@@ -66,15 +68,25 @@ export default function TrackOrderPage() {
   // ✅ refunds state
   const [refunds, setRefunds] = useState<any[]>([]);
 
-  // ✅ settings-driven payments (same idea as checkout)
+  // ✅ settings-driven payments
   const [settings, setSettings] = useState<any>(null);
-  const [payments, setPayments] = useState<{ COD: boolean; KHALTI: boolean; ESEWA: boolean }>({
+  const [payments, setPayments] = useState<{
+    COD: boolean;
+    KHALTI: boolean;
+    ESEWA: boolean;
+  }>({
     COD: true,
     KHALTI: true,
     ESEWA: true,
   });
 
   const [paymentChoice, setPaymentChoice] = useState<PaymentMethod>("COD");
+
+  // ✅ Cancel dialog state
+  const [cancelOpen, setCancelOpen] = useState(false);
+
+  // ✅ Refund dialog state (NEW)
+  const [refundOpen, setRefundOpen] = useState(false);
 
   const fetchSettings = async () => {
     try {
@@ -91,21 +103,18 @@ export default function TrackOrderPage() {
 
       setPayments(normalized);
 
-      // pick first enabled payment as default
       const firstEnabled: PaymentMethod | null = normalized.COD
         ? "COD"
         : normalized.KHALTI
-          ? "KHALTI"
-          : normalized.ESEWA
-            ? "ESEWA"
-            : null;
+        ? "KHALTI"
+        : normalized.ESEWA
+        ? "ESEWA"
+        : null;
 
       if (firstEnabled) setPaymentChoice(firstEnabled);
     } catch {
-      // fallback (don’t block page)
       setSettings(null);
       setPayments({ COD: true, KHALTI: true, ESEWA: true });
-      // keep current paymentChoice as-is
     }
   };
 
@@ -128,16 +137,13 @@ export default function TrackOrderPage() {
     }
   };
 
-  // ✅ fetch refunds (safe)
   const fetchRefunds = async () => {
     try {
-      // If you don't have this endpoint yet, this will throw.
       const res = await getMyRefunds();
       const all = res?.data || [];
       const list = all.filter((r: any) => String(r.order) === String(id));
       setRefunds(list);
     } catch {
-      // silently ignore (no endpoint yet)
       setRefunds([]);
     }
   };
@@ -146,12 +152,11 @@ export default function TrackOrderPage() {
     if (id) {
       fetchOrder();
       fetchRefunds();
-      fetchSettings(); // ✅ NEW
+      fetchSettings();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // show a tiny message after redirect
   useEffect(() => {
     const paid = sp.get("paid");
     if (paid === "1") setError("");
@@ -161,7 +166,10 @@ export default function TrackOrderPage() {
 
   const subtotal = useMemo(() => Number(order?.subtotal || 0), [order]);
   const shipping = useMemo(() => Number(order?.shippingFee || 0), [order]);
-  const total = useMemo(() => Number(order?.total || subtotal + shipping), [order, subtotal, shipping]);
+  const total = useMemo(
+    () => Number(order?.total || subtotal + shipping),
+    [order, subtotal, shipping]
+  );
 
   const currentStatus = String(order?.status || "").toLowerCase();
   const paymentStatus = String(order?.paymentStatus || "unpaid").toLowerCase();
@@ -171,26 +179,34 @@ export default function TrackOrderPage() {
   const activeIndex = Math.max(0, steps.indexOf(currentStatus as any));
 
   const canCancel = currentStatus === "pending" && paymentStatus !== "paid";
-  const canPay = ["pending", "confirmed", "shipped"].includes(currentStatus) && paymentStatus !== "paid";
+  const canPay =
+    ["pending", "confirmed", "shipped"].includes(currentStatus) &&
+    paymentStatus !== "paid";
 
-  // ✅ refund only if paid + pending/confirmed
-  const canRequestRefund = paymentStatus === "paid" && (currentStatus === "pending" || currentStatus === "confirmed");
+  const canRequestRefund =
+    paymentStatus === "paid" &&
+    (currentStatus === "pending" || currentStatus === "confirmed");
 
   const goBackSmart = () => {
     router.push("/user/dashboard/shop");
   };
 
-  const onCancel = async () => {
+  // ✅ Cancel modal open
+  const onCancelClick = () => {
     if (!canCancel) return;
+    setCancelOpen(true);
+  };
 
-    const reason = (prompt("Cancel reason (optional):") || "").trim();
-    if (!confirm("Cancel this order?")) return;
+  // ✅ Cancel action
+  const doCancel = async (reason: string) => {
+    if (!canCancel) return;
 
     setLoading(true);
     setError("");
     try {
-      const res = await cancelMyOrder(id, reason);
+      const res = await cancelMyOrder(id, (reason || "").trim());
       setOrder(res?.data || null);
+      setCancelOpen(false);
     } catch (e: any) {
       setError(e?.response?.data?.message || e?.message || "Failed to cancel order");
     } finally {
@@ -228,7 +244,6 @@ export default function TrackOrderPage() {
   const onPay = async () => {
     setError("");
 
-    // ✅ final safety check (settings-driven)
     if (
       (paymentChoice === "COD" && !payments.COD) ||
       (paymentChoice === "KHALTI" && !payments.KHALTI) ||
@@ -261,44 +276,53 @@ export default function TrackOrderPage() {
     setError("Pay Now is only for Khalti/eSewa payments.");
   };
 
-  // ✅ FIX: Single prompt only (no double OK)
-  // User types: "amount | reason"
-  // example: "200 | wrong amount charged"
-  const onRequestRefund = async () => {
+  // ✅ Refund modal open (NEW)
+  const onRefundClick = () => {
     if (!canRequestRefund || refundLoading) return;
+    setRefundOpen(true);
+  };
+
+  // ✅ Refund action using modal note text: "amount | reason"
+  // Example: "200 | wrong amount charged"
+  const doRefund = async (note: string) => {
+    if (!canRequestRefund || refundLoading) return;
+
+    const max = Number(order?.total || 0);
+
+    const raw = String(note || "").trim();
+    if (!raw) {
+      setError("Please enter refund amount.");
+      return;
+    }
+
+    const parts = raw.split("|");
+    const amountStr = String(parts[0] || "").trim();
+    const reason = String(parts[1] || "").trim();
+
+    const amount = Number(amountStr);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setError("Invalid refund amount");
+      return;
+    }
+    if (amount > max) {
+      setError(`Refund amount exceeds max Rs. ${max}`);
+      return;
+    }
 
     try {
       setError("");
       setRefundLoading(true);
 
-      const max = Number(order?.total || 0);
+      const res = await requestRefund({
+        orderId: id,
+        amount,
+        reason: reason || undefined,
+      });
 
-      const raw = prompt(
-        `Refund request format:\namount | reason(optional)\n\nExample:\n200 | Wrong amount charged\n\nMax: ${max} Rs`
-      );
-      if (!raw) return;
-
-      const parts = raw.split("|");
-      const amountStr = String(parts[0] || "").trim();
-      const reason = String(parts[1] || "").trim();
-
-      const amount = Number(amountStr);
-      if (!Number.isFinite(amount) || amount <= 0) {
-        setError("Invalid refund amount");
-        return;
-      }
-      if (amount > max) {
-        setError(`Refund amount exceeds max Rs. ${max}`);
-        return;
-      }
-
-      const res = await requestRefund({ orderId: id, amount, reason: reason || undefined });
-
-      // ✅ optimistic add
       const created = res?.data || res;
       if (created) setRefunds((prev) => [created, ...prev]);
 
-      // ✅ refresh (if endpoint exists)
+      setRefundOpen(false);
       await fetchRefunds();
     } catch (e: any) {
       setError(e?.response?.data?.message || e?.message || "Refund request failed");
@@ -309,10 +333,40 @@ export default function TrackOrderPage() {
 
   const showPayNow =
     canPay &&
-    ((paymentChoice === "KHALTI" && payments.KHALTI) || (paymentChoice === "ESEWA" && payments.ESEWA));
+    ((paymentChoice === "KHALTI" && payments.KHALTI) ||
+      (paymentChoice === "ESEWA" && payments.ESEWA));
 
   return (
     <div className="p-6">
+      {/* ✅ Cancel modal */}
+      <NoteDialog
+        open={cancelOpen}
+        onOpenChange={setCancelOpen}
+        title="Cancel this order?"
+        description="Tell us the reason (optional). This action cannot be undone."
+        label="Cancel reason (optional)"
+        placeholder="Example: Ordered by mistake"
+        confirmText="Yes, cancel"
+        cancelText="No"
+        destructive
+        loading={loading}
+        onConfirm={doCancel}
+      />
+
+      {/* ✅ Refund modal (NEW) */}
+      <NoteDialog
+        open={refundOpen}
+        onOpenChange={setRefundOpen}
+        title="Request a refund"
+        description={`Enter amount and reason.\nFormat: amount | reason(optional)\nMax: ${Number(order?.total || 0)} Rs`}
+        label="Refund amount | reason(optional)"
+        placeholder="Example: 200 | Wrong amount charged"
+        confirmText="Submit refund"
+        cancelText="Cancel"
+        loading={refundLoading}
+        onConfirm={doRefund}
+      />
+
       <div className="mb-6 flex items-start justify-between gap-3">
         <div>
           <div className="text-sm text-slate-500">Account / Orders / {id}</div>
@@ -340,7 +394,11 @@ export default function TrackOrderPage() {
           )}
 
           {canCancel && (
-            <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={onCancel} disabled={loading}>
+            <Button
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={onCancelClick}
+              disabled={loading}
+            >
               {loading ? "Cancelling..." : "Cancel Order"}
             </Button>
           )}
@@ -457,7 +515,11 @@ export default function TrackOrderPage() {
 
             {paymentStatus === "paid" && (
               <div className="mt-2 space-y-3">
-                <Button variant="outline" className="border-slate-300 w-full" onClick={onDownloadInvoice}>
+                <Button
+                  variant="outline"
+                  className="border-slate-300 w-full"
+                  onClick={onDownloadInvoice}
+                >
                   Download Invoice (PDF)
                 </Button>
 
@@ -465,14 +527,13 @@ export default function TrackOrderPage() {
                   <Button
                     variant="outline"
                     className="border-slate-300 w-full"
-                    onClick={onRequestRefund}
+                    onClick={onRefundClick} // ✅ modal instead of prompt
                     disabled={refundLoading}
                   >
                     {refundLoading ? "Submitting..." : "Request Refund"}
                   </Button>
                 )}
 
-                {/* ✅ Refund status list */}
                 {refunds.length > 0 && (
                   <div className="rounded-xl border bg-slate-50 p-3">
                     <div className="font-semibold text-slate-900 text-sm mb-2">Refund Requests</div>
@@ -547,10 +608,6 @@ export default function TrackOrderPage() {
                       />
                       eSewa
                     </label>
-                  )}
-
-                  {!payments.COD && !payments.KHALTI && !payments.ESEWA && (
-                    <div className="text-xs text-rose-600">No payment methods enabled (admin settings).</div>
                   )}
                 </div>
               </div>

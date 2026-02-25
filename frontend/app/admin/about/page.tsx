@@ -12,6 +12,7 @@ import {
 } from "@/lib/api/admin/about";
 
 type Social = { label: string; url: string };
+import { useToast } from "@/hooks/use-toast";
 
 function backendPublic(pathname: string) {
   const base = (process.env.NEXT_PUBLIC_BACKEND_URL || "").replace(/\/$/, "");
@@ -22,6 +23,7 @@ function backendPublic(pathname: string) {
 }
 
 export default function AdminAboutPage() {
+  
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -43,6 +45,7 @@ export default function AdminAboutPage() {
     if (!missionImage) return "";
     return backendPublic(`about/${missionImage}`);
   }, [missionImage]);
+  const { toast } = useToast();
 
   const visionPreview = useMemo(() => {
     if (!visionImage) return "";
@@ -94,9 +97,21 @@ export default function AdminAboutPage() {
         published,
         socials,
       });
+       toast({
+        title: "Saved",
+        description: "About page updated successfully.",
+        duration: 1200,
+      });
       await fetchDoc();
     } catch (e: any) {
-      setError(e?.response?.data?.message || e?.message || "Save failed");
+      const msg = e?.response?.data?.message || e?.message || "Save failed";
+      setError(msg);
+      toast({
+        title: "Save failed",
+        description: msg,
+        variant: "destructive",
+        duration: 2000,
+      });
     } finally {
       setLoading(false);
     }

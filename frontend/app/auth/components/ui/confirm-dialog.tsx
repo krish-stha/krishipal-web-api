@@ -1,79 +1,93 @@
 "use client";
 
-import { useEffect } from "react";
-import { Card } from "@/app/auth/components/ui/card";
-import { Button } from "@/app/auth/components/ui/button";
+import * as React from "react";
+
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/app/auth/components/ui/alert-dialog";
+
+import { cn } from "@/lib/utlis";
 
 type ConfirmDialogProps = {
   open: boolean;
-  title?: string;
-  description?: string;
+  onOpenChange: (open: boolean) => void;
+
+  title?: React.ReactNode;
+  description?: React.ReactNode;
+
   confirmText?: string;
   cancelText?: string;
-  danger?: boolean;
+
+  destructive?: boolean;
   loading?: boolean;
-  onConfirm: () => void;
-  onCancel: () => void;
+  disabled?: boolean;
+
+  onConfirm: () => void | Promise<void>;
+
+  /** optional: control width / styling */
+  contentClassName?: string;
 };
 
 export function ConfirmDialog({
   open,
-  title = "Confirm",
-  description = "Are you sure?",
+  onOpenChange,
+  title = "Are you sure?",
+  description = "This action cannot be undone.",
   confirmText = "Confirm",
   cancelText = "Cancel",
-  danger = false,
+  destructive = false,
   loading = false,
+  disabled = false,
   onConfirm,
-  onCancel,
+  contentClassName,
 }: ConfirmDialogProps) {
-  // close on ESC
-  useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCancel();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, onCancel]);
-
-  if (!open) return null;
+  const isDisabled = disabled || loading;
 
   return (
-    <div className="fixed inset-0 z-[9999]">
-      {/* Overlay */}
-      <div className="absolute inset-0 bg-black/50" onClick={onCancel} />
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent className={cn("rounded-2xl", contentClassName)}>
+        <AlertDialogHeader>
+          <AlertDialogTitle className="text-base font-semibold">
+            {title}
+          </AlertDialogTitle>
+          <AlertDialogDescription className="text-sm text-slate-600">
+            {description}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
 
-      {/* Modal */}
-      <div className="absolute inset-0 grid place-items-center p-4">
-        <Card className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-          <div className="text-lg font-semibold text-slate-900">{title}</div>
-          <div className="mt-2 text-sm text-slate-600">{description}</div>
+        <AlertDialogFooter className="gap-2 sm:gap-2">
+          <AlertDialogCancel
+            disabled={isDisabled}
+            className="rounded-xl"
+          >
+            {cancelText}
+          </AlertDialogCancel>
 
-          <div className="mt-6 flex justify-end gap-2">
-            <Button
-              variant="outline"
-              className="border-slate-300"
-              onClick={onCancel}
-              disabled={loading}
-            >
-              {cancelText}
-            </Button>
-
-            <Button
-              className={
-                danger
-                  ? "bg-red-600 hover:bg-red-700 text-white"
-                  : "bg-green-600 hover:bg-green-700 text-white"
-              }
-              onClick={onConfirm}
-              disabled={loading}
-            >
-              {loading ? "Please wait..." : confirmText}
-            </Button>
-          </div>
-        </Card>
-      </div>
-    </div>
+          <AlertDialogAction
+            disabled={isDisabled}
+            className={cn(
+              "rounded-xl text-white",
+              destructive
+                ? "bg-red-600 hover:bg-red-700 focus-visible:ring-red-600"
+                : "bg-green-600 hover:bg-green-700 focus-visible:ring-green-600"
+            )}
+            onClick={(e) => {
+              // Prevent dialog auto-close until parent decides via open state.
+              e.preventDefault();
+              void onConfirm();
+            }}
+          >
+            {loading ? "Please wait..." : confirmText}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
