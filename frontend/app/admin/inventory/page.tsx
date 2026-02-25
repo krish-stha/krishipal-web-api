@@ -205,7 +205,6 @@ export default function AdminInventoryPage() {
     <div className="p-6 space-y-6">
       <div>
         <h1 className="text-xl font-semibold text-slate-900">Inventory</h1>
-        <p className="text-sm text-slate-600">Stock in/out, low stock, and recent logs.</p>
       </div>
 
       {error && (
@@ -248,7 +247,6 @@ export default function AdminInventoryPage() {
         <div className="md:col-span-2 rounded-2xl border bg-white p-5">
           <div className="flex items-center justify-between">
             <div className="font-semibold text-slate-900">Quick Stock Update</div>
-            <div className="text-xs text-slate-500">Tip: add a reason for audit.</div>
           </div>
 
           <div className="mt-3 grid grid-cols-1 md:grid-cols-4 gap-2">
@@ -319,7 +317,6 @@ export default function AdminInventoryPage() {
           </div>
 
           <div className="mt-2 text-xs text-slate-500">
-            Stock out is confirmed to prevent mistakes.
           </div>
         </div>
       </div>

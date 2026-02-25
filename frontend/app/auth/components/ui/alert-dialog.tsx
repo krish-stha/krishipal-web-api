@@ -243,7 +243,6 @@ export function NoteDialog({
             onChange={(e) => setNote(e.target.value)}
           />
           <div className="text-[11px] text-slate-500">
-            This note will be saved in admin logs (optional).
           </div>
         </div>
 

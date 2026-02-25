@@ -358,9 +358,9 @@ export default function TrackOrderPage() {
         open={refundOpen}
         onOpenChange={setRefundOpen}
         title="Request a refund"
-        description={`Enter amount and reason.\nFormat: amount | reason(optional)\nMax: ${Number(order?.total || 0)} Rs`}
-        label="Refund amount | reason(optional)"
-        placeholder="Example: 200 | Wrong amount charged"
+        description="Enter Refund Amount"
+        label="Refund amount"
+        placeholder="Example: 200"
         confirmText="Submit refund"
         cancelText="Cancel"
         loading={refundLoading}
@@ -369,9 +369,8 @@ export default function TrackOrderPage() {
 
       <div className="mb-6 flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm text-slate-500">Account / Orders / {id}</div>
           <h1 className="text-2xl font-bold text-slate-900">Track Order</h1>
-          <p className="text-slate-600 mt-1">Order status + items snapshot.</p>
+          <p className="text-slate-600 mt-1"></p>
         </div>
 
         <div className="flex gap-2">
@@ -389,7 +388,7 @@ export default function TrackOrderPage() {
               onClick={onPay}
               disabled={loading}
             >
-              {loading ? "Processing..." : `Pay Now (${paymentChoice})`}
+              {loading ? "Processing..." : `Pay Now `}
             </Button>
           )}
 

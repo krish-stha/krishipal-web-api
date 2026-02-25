@@ -118,7 +118,6 @@ export default function AdminOrdersPage() {
         {/* Header */}
         <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <div className="text-xs text-slate-500">Admin / Orders</div>
             <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">Orders</h1>
             <p className="mt-1 text-sm text-slate-600">Manage user orders and update order status.</p>
           </div>

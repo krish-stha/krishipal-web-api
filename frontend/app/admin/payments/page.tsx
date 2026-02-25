@@ -134,7 +134,6 @@ export default function AdminPaymentsPage() {
   return (
     <div className="p-6">
       <div className="mb-6">
-        <div className="text-sm text-slate-500">Admin / Payments</div>
         <h1 className="text-2xl font-bold text-slate-900">Payments</h1>
         <p className="text-slate-600 mt-1">Payment logs, refunds, and audit trail.</p>
       </div>

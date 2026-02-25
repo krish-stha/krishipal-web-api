@@ -153,9 +153,8 @@ export default function CheckoutPage() {
       <main className="flex-1">
         <div className="container mx-auto px-4 py-10">
           <div className="mb-6">
-            <div className="text-sm text-slate-500">Shop / Checkout</div>
             <h1 className="text-3xl font-bold text-slate-900">Checkout</h1>
-            <p className="text-slate-600 mt-1">Tick items you want to checkout. Unticked items stay in cart.</p>
+            <p className="text-slate-600 mt-1">Select the Items you want to urchase.</p>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -268,7 +267,7 @@ export default function CheckoutPage() {
                     onClick={placeOrder}
                     disabled={busy || loading || selectedItems.length === 0 || (!payments.COD && !payments.KHALTI && !payments.ESEWA)}
                   >
-                    {busy ? "Placing..." : `Place Order (${pay})`}
+                    {busy ? "Placing..." : `Place Order `}
                   </Button>
                 </div>
               </Card>

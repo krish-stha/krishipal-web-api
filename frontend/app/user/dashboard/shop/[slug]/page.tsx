@@ -376,8 +376,8 @@ export default function ShopProductDetailPage() {
                 <Card className="rounded-2xl p-6">
                   <div className="font-semibold text-slate-900">Delivery & Returns</div>
                   <ul className="mt-2 text-sm text-slate-600 space-y-1 list-disc pl-5">
-                    <li>Delivery fee is calculated at checkout based on admin settings.</li>
-                    <li>Online payments: Khalti / eSewa (if enabled).</li>
+                    <li>Delivery fee is calculated at checkout.</li>
+                    <li>Online payments: Khalti and Esewa.</li>
                     <li>Return policy depends on item category and condition.</li>
                   </ul>
                 </Card>

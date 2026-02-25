@@ -100,7 +100,6 @@ export default function AdminOrderDetailPage() {
         {/* Top Bar */}
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <div className="text-xs text-slate-500">Admin / Orders / {id}</div>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-bold tracking-tight text-slate-900">Order Detail</h1>
               <StatusPill status={order?.status} />

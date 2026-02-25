@@ -212,7 +212,6 @@ export default function AdminCategoriesPage() {
               {loading ? "Please wait..." : "Add"}
             </Button>
           </div>
-          <div className="mt-2 text-xs text-slate-500">Tip: press Enter to add quickly.</div>
         </CardContent>
       </Card>
 

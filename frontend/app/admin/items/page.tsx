@@ -323,7 +323,6 @@ export default function AdminItemsPage() {
                 value={sku}
                 onChange={(e) => setSku(e.target.value)}
               />
-              <p className="text-xs text-gray-500 mt-1">Must be unique. Auto uppercased on save.</p>
             </div>
           </div>
 
@@ -348,7 +347,6 @@ export default function AdminItemsPage() {
                 value={stockStr}
                 onChange={(e) => setStockStr(e.target.value)}
               />
-              <p className="text-xs text-gray-500 mt-1">Leave blank to default to 0.</p>
             </div>
 
             <div>
@@ -358,8 +356,8 @@ export default function AdminItemsPage() {
                 value={status}
                 onChange={(e) => setStatus(e.target.value as any)}
               >
-                <option value="active">Active (visible)</option>
-                <option value="draft">Draft (hidden)</option>
+                <option value="active">Active</option>
+                <option value="draft">Draft</option>
               </select>
             </div>
           </div>
