@@ -3,7 +3,6 @@ import cors from "cors";
 import path from "path";
 
 import authRoutes from "./routes/auth.route";
-import addressBatchRoutes from "./routes/address_batch_route";
 import adminUserRoutes from "./routes/admin.user.route";
 import { errorHandler } from "./middleware/error.middleware";
 import adminCategoryRoutes from "./routes/admin.category.route";
@@ -46,7 +45,6 @@ app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 // Routes
 app.use("/api/auth", authRoutes);
-app.use("/api/batches", addressBatchRoutes);
 
 app.use("/api/admin", adminUserRoutes);
 app.use("/api/categories", publicCategoryRoutes);
