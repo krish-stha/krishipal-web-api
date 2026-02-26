@@ -14,20 +14,34 @@ function backendPublic(pathname: string) {
   if (pathname.startsWith("/")) return `${base}${pathname}`;
   return `${base}/public/${pathname}`;
 }
+function resolveAboutImage(fnOrUrl: string, fallback: string) {
+  const v = String(fnOrUrl || "").trim();
+  if (!v) return fallback;
+
+  // if already absolute, return as-is
+  if (v.startsWith("http://") || v.startsWith("https://")) return v;
+
+  // otherwise treat as filename in /public/about/
+  return backendPublic(`about/${v}`);
+}
 
 export default function AboutPage() {
   const [storeName, setStoreName] = useState("KrishiPal");
   const [about, setAbout] = useState<any>(null);
 
-  const missionImg = useMemo(() => {
-    const fn = String(about?.missionImage || "");
-    return fn ? backendPublic(`about/${fn}`) : "/images/farmers-working-in-green-rice-paddy-field.png";
-  }, [about?.missionImage]);
+const missionImg = useMemo(() => {
+  return resolveAboutImage(
+    about?.missionImage,
+    "/images/farmers-working-in-green-rice-paddy-field.png"
+  );
+}, [about?.missionImage]);
 
-  const visionImg = useMemo(() => {
-    const fn = String(about?.visionImage || "");
-    return fn ? backendPublic(`about/${fn}`) : "/images/modern-greenhouse-agricultural-technology.png";
-  }, [about?.visionImage]);
+const visionImg = useMemo(() => {
+  return resolveAboutImage(
+    about?.visionImage,
+    "/images/modern-greenhouse-agricultural-technology.png"
+  );
+}, [about?.visionImage]);
 
   useEffect(() => {
     let alive = true;
