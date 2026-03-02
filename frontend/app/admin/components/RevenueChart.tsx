@@ -14,17 +14,17 @@ import {
 export function RevenueChart({
   loading,
   rows,
-  mode,
   from,
   to,
+  chartType,
 }: {
   loading: boolean;
   rows: any[];
-  mode: "daily" | "monthly";
   from?: string;
   to?: string;
+  chartType?: "day" | "month";
 }) {
-  const title = mode === "daily" ? "Daily Revenue" : "Monthly Revenue";
+  const title = chartType === "day" ? "Daily Revenue" : "Monthly Revenue";
 
   return (
     <Card className="rounded-2xl">
@@ -40,16 +40,15 @@ export function RevenueChart({
 
         <div className="mt-4 h-[260px]">
           {loading ? (
-            <div className="h-full grid place-items-center text-sm text-slate-500">Loading chart...</div>
+            <div className="h-full grid place-items-center text-sm text-slate-500">
+              Loading chart...
+            </div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={rows}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="label"
-                  interval="preserveStartEnd"
-                  tickFormatter={(v) => (mode === "daily" ? String(v).slice(5) : v)} // daily -> "MM-DD"
-                />
+                {/* ✅ backend uses label */}
+                <XAxis dataKey="label" />
                 <YAxis />
                 <Tooltip />
                 <Line type="monotone" dataKey="revenue" />

@@ -37,5 +37,5 @@
 //     })();
 //   }, [sp, router]);
 
-//   return <div style={{ padding: 24 }}>{msg}</div>;
+//   return <div style={{ padd  ing: 24 }}>{msg}</div>;
 // }

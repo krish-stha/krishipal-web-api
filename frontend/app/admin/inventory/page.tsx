@@ -318,7 +318,7 @@ export default function AdminInventoryPage() {
 
           <div className="mt-2 text-xs text-slate-500">
           </div>
-        </div>
+        </div>  
       </div>
 
       {/* Logs */}
