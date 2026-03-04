@@ -23,6 +23,10 @@ import adminSettingsRoutes from "./routes/admin.settings.route";
 import settingsRoutes from "./routes/settings.route";
 import adminAboutRoutes from "./routes/admin.about.route";
 import aboutRoutes from "./routes/about.route";
+import { verifyEmailTransport } from "./services/mail.service";
+
+const PORT = process.env.PORT || 5000;
+
 
 const app = express();
 
@@ -71,6 +75,11 @@ app.use("/api/admin", adminSettingsRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/admin", adminAboutRoutes);
 app.use("/api", aboutRoutes);
+
+app.listen(PORT, async () => {
+  console.log(`Server running on port ${PORT}`);
+  await verifyEmailTransport();
+});
 
 
 

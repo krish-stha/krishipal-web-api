@@ -195,80 +195,80 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import { SettingsModel } from "../models/settings.model";
-import { HttpError } from "../errors/http-error";
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">  import { SettingsModel } from "../models/settings.model";
+  import { HttpError } from "../errors/http-error";
 &nbsp;
-export class SettingsService {
-  async getOrCreate() {
-    let s = await SettingsModel.findOne({}).lean();
-    if (!s) s = (await SettingsModel.create({})).toObject();
-    return s;
-  }
-&nbsp;
-  async update(payload: any) {
-    // basic validation
-    const data: any = {};
-&nbsp;
-    if (payload.storeName !== undefined) data.storeName = String(payload.storeName || <span class="branch-1 cbranch-no" title="branch not covered" >"")</span>.trim();
-    if (payload.storeAddress !== undefined) data.storeAddress = String(payload.storeAddress || <span class="branch-1 cbranch-no" title="branch not covered" >"")</span>.trim();
-    if (payload.storeEmail !== undefined) data.storeEmail = String(payload.storeEmail || <span class="branch-1 cbranch-no" title="branch not covered" >"")</span>.trim();
-    if (payload.storePhone !== undefined) {
-     data.storePhone = String(payload.storePhone || <span class="branch-1 cbranch-no" title="branch not covered" >"")</span>.trim();
-    }
-    if (payload.storeLogo !== undefined) data.storeLogo = String(payload.storeLogo || <span class="branch-1 cbranch-no" title="branch not covered" >"")</span>.trim();
-&nbsp;
-    if (payload.shippingFeeDefault !== undefined) {
-      const v = Number(payload.shippingFeeDefault);
-      if (!Number.isFinite(v) || v &lt; 0) throw new HttpError(400, "Invalid shippingFeeDefault");
-      data.shippingFeeDefault = v;
+  export class SettingsService {
+    async getOrCreate() {
+      let s = await SettingsModel.findOne({}).lean();
+      if (!s) s = (await SettingsModel.create({})).toObject();
+      return s;
     }
 &nbsp;
-    if (payload.freeShippingThreshold !== undefined) {
-      if (payload.freeShippingThreshold === null || payload.freeShippingThreshold === "") {
-        data.freeShippingThreshold = null;
-      } else {
-        const v = Number(payload.freeShippingThreshold);
-        <span class="missing-if-branch" title="else path not taken" >E</span>if (!Number.isFinite(v) || v &lt; 0) throw new HttpError(400, "Invalid freeShippingThreshold");
-<span class="cstat-no" title="statement not covered" >        data.freeShippingThreshold = v;</span>
+    async update(payload: any) {
+      // basic validation
+      const data: any = {};
+&nbsp;
+      if (payload.storeName !== undefined) data.storeName = String(payload.storeName || <span class="branch-1 cbranch-no" title="branch not covered" >"")</span>.trim();
+      if (payload.storeAddress !== undefined) data.storeAddress = String(payload.storeAddress || <span class="branch-1 cbranch-no" title="branch not covered" >"")</span>.trim();
+      if (payload.storeEmail !== undefined) data.storeEmail = String(payload.storeEmail || <span class="branch-1 cbranch-no" title="branch not covered" >"")</span>.trim();
+      if (payload.storePhone !== undefined) {
+      data.storePhone = String(payload.storePhone || <span class="branch-1 cbranch-no" title="branch not covered" >"")</span>.trim();
       }
+      if (payload.storeLogo !== undefined) data.storeLogo = String(payload.storeLogo || <span class="branch-1 cbranch-no" title="branch not covered" >"")</span>.trim();
+&nbsp;
+      if (payload.shippingFeeDefault !== undefined) {
+        const v = Number(payload.shippingFeeDefault);
+        if (!Number.isFinite(v) || v &lt; 0) throw new HttpError(400, "Invalid shippingFeeDefault");
+        data.shippingFeeDefault = v;
+      }
+&nbsp;
+      if (payload.freeShippingThreshold !== undefined) {
+        if (payload.freeShippingThreshold === null || payload.freeShippingThreshold === "") {
+          data.freeShippingThreshold = null;
+        } else {
+          const v = Number(payload.freeShippingThreshold);
+          <span class="missing-if-branch" title="else path not taken" >E</span>if (!Number.isFinite(v) || v &lt; 0) throw new HttpError(400, "Invalid freeShippingThreshold");
+<span class="cstat-no" title="statement not covered" >          data.freeShippingThreshold = v;</span>
+        }
+      }
+&nbsp;
+      if (payload.lowStockThreshold !== undefined) {
+        const v = Number(payload.lowStockThreshold);
+        if (!Number.isFinite(v) || v &lt; 1) throw new HttpError(400, "Invalid lowStockThreshold");
+        data.lowStockThreshold = v;
+      }
+&nbsp;
+      if (payload.payments !== undefined) {
+        data.payments = {
+          COD: Boolean(payload.payments?.COD),
+          KHALTI: Boolean(payload.payments?.KHALTI),
+          ESEWA: Boolean(payload.payments?.ESEWA),
+        };
+      }
+&nbsp;
+      const existing = await SettingsModel.findOne({});
+      if (!existing) {
+        const created = await SettingsModel.create(data);
+        return created.toObject();
+      }
+&nbsp;
+      const updated = await SettingsModel.findByIdAndUpdate(
+        existing._id,
+        { $set: data },
+        { new: true }
+      ).lean();
+&nbsp;
+      return updated;
     }
-&nbsp;
-    if (payload.lowStockThreshold !== undefined) {
-      const v = Number(payload.lowStockThreshold);
-      if (!Number.isFinite(v) || v &lt; 1) throw new HttpError(400, "Invalid lowStockThreshold");
-      data.lowStockThreshold = v;
-    }
-&nbsp;
-    if (payload.payments !== undefined) {
-      data.payments = {
-        COD: Boolean(payload.payments?.COD),
-        KHALTI: Boolean(payload.payments?.KHALTI),
-        ESEWA: Boolean(payload.payments?.ESEWA),
-      };
-    }
-&nbsp;
-    const existing = await SettingsModel.findOne({});
-    if (!existing) {
-      const created = await SettingsModel.create(data);
-      return created.toObject();
-    }
-&nbsp;
-    const updated = await SettingsModel.findByIdAndUpdate(
-      existing._id,
-      { $set: data },
-      { new: true }
-    ).lean();
-&nbsp;
-    return updated;
-  }
-}</pre></td></tr></table></pre>
+  }</pre></td></tr></table></pre>
 
                 <div class='push'></div><!-- for sticky footer -->
             </div><!-- /wrapper -->
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-25T18:34:51.881Z
+                at 2026-03-03T22:11:18.784Z
             </div>
         <script src="../prettify.js"></script>
         <script>

@@ -23,9 +23,9 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">72.3% </span>
+                <span class="strong">73.13% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>47/65</span>
+                <span class='fraction'>49/67</span>
             </div>
         
             
@@ -37,16 +37,16 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">71.42% </span>
+                <span class="strong">75% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>5/7</span>
+                <span class='fraction'>6/8</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">76.78% </span>
+                <span class="strong">77.58% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>43/56</span>
+                <span class='fraction'>45/58</span>
             </div>
         
             
@@ -195,7 +195,17 @@
 <a name='L130'></a><a href='#L130'>130</a>
 <a name='L131'></a><a href='#L131'>131</a>
 <a name='L132'></a><a href='#L132'>132</a>
-<a name='L133'></a><a href='#L133'>133</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">22x</span>
+<a name='L133'></a><a href='#L133'>133</a>
+<a name='L134'></a><a href='#L134'>134</a>
+<a name='L135'></a><a href='#L135'>135</a>
+<a name='L136'></a><a href='#L136'>136</a>
+<a name='L137'></a><a href='#L137'>137</a>
+<a name='L138'></a><a href='#L138'>138</a>
+<a name='L139'></a><a href='#L139'>139</a>
+<a name='L140'></a><a href='#L140'>140</a>
+<a name='L141'></a><a href='#L141'>141</a>
+<a name='L142'></a><a href='#L142'>142</a>
+<a name='L143'></a><a href='#L143'>143</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">22x</span>
 <span class="cline-any cline-yes">22x</span>
 <span class="cline-any cline-yes">22x</span>
 <span class="cline-any cline-yes">22x</span>
@@ -206,6 +216,11 @@
 <span class="cline-any cline-yes">22x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">22x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">22x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -240,7 +255,6 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">69x</span>
 <span class="cline-any cline-yes">69x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -284,12 +298,13 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -300,7 +315,13 @@
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -325,7 +346,6 @@
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -338,6 +358,11 @@ import { UserModel } from "../models/user.model";
 import { sendResetEmail } from "./mail.service";
 &nbsp;
 const userRepo = new UserRepository();
+&nbsp;
+function gen6DigitCode() {
+  // 100000 - 999999
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
 &nbsp;
 export class UserService {
   async register(data: CreateUserDTO) {
@@ -372,7 +397,6 @@ export class UserService {
       { expiresIn: "30d" }
     );
 &nbsp;
-    // remove password in response
     const safeUser = await userRepo.getById(String(user._id));
     return { user: safeUser, token };
   }
@@ -412,34 +436,41 @@ export class UserService {
 <span class="cstat-no" title="statement not covered" >    return updated;</span>
   }
 &nbsp;
-  // ✅ NEW: Forgot password
-  // - Always returns success (even if email not found) to avoid user enumeration
-  // - Stores token + expiry in DB
+  // ✅ Forgot password
+  // - Always returns success even if email not found
+  // - Stores token + expiry in DB (same as before)
+  // - Sends BOTH: link + 6-digit code (NO verification added)
   async forgotPassword(email: string) {
-  const user = await UserModel.findOne({
-    email: email.toLowerCase(),
-    deleted_at: null,
-  });
+    const user = await UserModel.findOne({
+      email: email.toLowerCase(),
+      deleted_at: null,
+    });
 &nbsp;
-  if (!user) {
-    return { message: "If your email exists, a reset link has been sent." };
+    if (!user) {
+      return { message: "If your email exists, a reset link has been sent." };
+    }
+&nbsp;
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+&nbsp;
+    user.reset_password_token = tokenHash;
+    user.reset_password_expires_at = new Date(Date.now() + 1000 * 60 * 15);
+    await user.save();
+&nbsp;
+    // ✅ NEW: generate a code (not stored/verified - as per your request)
+    const code = gen6DigitCode();
+&nbsp;
+    // ✅ add code into link for frontend UI (not verified by backend)
+    const resetLink =
+      `${process.env.FRONTEND_URL}` +
+      `/auth/reset-password?token=${rawToken}&amp;code=${code}`;
+&nbsp;
+    await sendResetEmail(user.email, resetLink, code);
+&nbsp;
+    return { message: "Reset email sent successfully." };
   }
 &nbsp;
-  const rawToken = crypto.randomBytes(32).toString("hex");
-  const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
-&nbsp;
-  user.reset_password_token = tokenHash;
-  user.reset_password_expires_at = new Date(Date.now() + 1000 * 60 * 15);
-  await user.save();
-&nbsp;
-  const resetLink = `${process.env.FRONTEND_URL}/auth/reset-password?token=${rawToken}`;
-&nbsp;
-  await sendResetEmail(user.email, resetLink);
-&nbsp;
-  return { message: "Reset email sent successfully." };
-}
-&nbsp;
-  // ✅ NEW: Reset password
+  // ✅ Reset password (token only)
   async resetPassword(token: string, newPassword: string) {
     const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
 &nbsp;
@@ -458,15 +489,14 @@ export class UserService {
 &nbsp;
     return { message: "Password reset successful" };
   }
-}
-&nbsp;</pre></td></tr></table></pre>
+}</pre></td></tr></table></pre>
 
                 <div class='push'></div><!-- for sticky footer -->
             </div><!-- /wrapper -->
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-25T18:34:51.881Z
+                at 2026-03-03T22:11:18.784Z
             </div>
         <script src="../prettify.js"></script>
         <script>

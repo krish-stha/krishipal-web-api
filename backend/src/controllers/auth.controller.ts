@@ -44,7 +44,7 @@ export class AuthController {
     res.status(200).json({ success: true, ...result });
   }
 
-  // ✅ NEW: POST /api/auth/forgot-password
+  // ✅ POST /api/auth/forgot-password
   async forgotPassword(req: Request, res: Response) {
     const parsed = ForgotPasswordDTO.safeParse(req.body);
     if (!parsed.success) {
@@ -54,11 +54,14 @@ export class AuthController {
       });
     }
 
-    const result = await userService.forgotPassword(parsed.data.email);
+    // ✅ fix: normalize email
+    const email = parsed.data.email.toLowerCase().trim();
+
+    const result = await userService.forgotPassword(email);
     return res.status(200).json({ success: true, ...result });
   }
 
-  // ✅ NEW: POST /api/auth/reset-password
+  // ✅ POST /api/auth/reset-password
   async resetPassword(req: Request, res: Response) {
     const parsed = ResetPasswordDTO.safeParse(req.body);
     if (!parsed.success) {
@@ -68,7 +71,10 @@ export class AuthController {
       });
     }
 
-    const result = await userService.resetPassword(parsed.data.token, parsed.data.password);
+    const result = await userService.resetPassword(
+      parsed.data.token,
+      parsed.data.password
+    );
     return res.status(200).json({ success: true, ...result });
   }
 
@@ -92,10 +98,15 @@ export class AuthController {
 
     const file = (req as any).file as Express.Multer.File | undefined;
     if (!file) {
-      return res.status(400).json({ success: false, message: "Please upload a photo file" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Please upload a photo file" });
     }
 
-    const updatedUser = await userService.setProfilePicture(userId, file.filename);
+    const updatedUser = await userService.setProfilePicture(
+      userId,
+      file.filename
+    );
 
     res.status(200).json({
       success: true,
@@ -123,8 +134,14 @@ export class AuthController {
     const file = (req as any).file as Express.Multer.File | undefined;
     const profileFilename = file?.filename ?? null;
 
-    const updated = await userService.updateProfileById(paramId, req.body, profileFilename);
+    const updated = await userService.updateProfileById(
+      paramId,
+      req.body,
+      profileFilename
+    );
 
-    return res.status(200).json({ success: true, data: updated, message: "Profile updated" });
+    return res
+      .status(200)
+      .json({ success: true, data: updated, message: "Profile updated" });
   }
 }

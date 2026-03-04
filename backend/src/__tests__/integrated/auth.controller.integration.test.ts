@@ -6,6 +6,9 @@ import { registerTestUser, loginTestUser } from "../helpers/test-auth";
 
 jest.mock("../../services/mail.service", () => ({
   sendResetEmail: jest.fn(async () => true),
+  verifyEmailTransport: jest.fn(async () => true),
+  sendPaymentReceiptEmail: jest.fn(async () => true),
+  sendOrderStatusEmail: jest.fn(async () => true),
 }));
 
 function expectHasAnyErrorBody(res: request.Response) {
