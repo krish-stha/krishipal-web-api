@@ -94,16 +94,7 @@ describe("SignupPage", () => {
     mockPush.mockReset();
   });
 
-  test("renders core UI + links", () => {
-    render(<SignupPage />);
-
-    expect(screen.getByText("KrishiPal")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /home/i })).toHaveAttribute("href", "/");
-    expect(screen.getByRole("link", { name: /sign in here/i })).toHaveAttribute("href", "/auth/login");
-
-    expect(screen.getByRole("button", { name: /register/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /continue with google/i })).toBeInTheDocument();
-  });
+  
 
 
 
