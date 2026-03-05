@@ -3,7 +3,6 @@ import cors from "cors";
 import path from "path";
 
 import authRoutes from "./routes/auth.route";
-import addressBatchRoutes from "./routes/address_batch_route";
 import adminUserRoutes from "./routes/admin.user.route";
 import { errorHandler } from "./middleware/error.middleware";
 import adminCategoryRoutes from "./routes/admin.category.route";
@@ -24,6 +23,10 @@ import adminSettingsRoutes from "./routes/admin.settings.route";
 import settingsRoutes from "./routes/settings.route";
 import adminAboutRoutes from "./routes/admin.about.route";
 import aboutRoutes from "./routes/about.route";
+import { verifyEmailTransport } from "./services/mail.service";
+
+const PORT = process.env.PORT || 5000;
+
 
 const app = express();
 
@@ -46,7 +49,6 @@ app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 // Routes
 app.use("/api/auth", authRoutes);
-app.use("/api/batches", addressBatchRoutes);
 
 app.use("/api/admin", adminUserRoutes);
 app.use("/api/categories", publicCategoryRoutes);
@@ -73,6 +75,11 @@ app.use("/api/admin", adminSettingsRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/admin", adminAboutRoutes);
 app.use("/api", aboutRoutes);
+
+app.listen(PORT, async () => {
+  console.log(`Server running on port ${PORT}`);
+  await verifyEmailTransport();
+});
 
 
 

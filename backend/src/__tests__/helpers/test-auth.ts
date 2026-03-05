@@ -1,28 +1,42 @@
 import request from "supertest";
+import crypto from "crypto";
 import app from "../../app";
 import { UserModel } from "../../models/user.model";
 
-const DEFAULT_PASSWORD = "Password@123!"; // keep exactly same everywhere
+const DEFAULT_PASSWORD = "Password@123!";
 
-export async function registerTestUser(overrides?: Partial<any>) {
-  const email = overrides?.email ?? `user${Date.now()}@test.com`;
+type RegisterOverrides = Partial<{
+  fullName: string;
+  email: string;
+  countryCode: string;
+  phone: string;
+  address: string;
+  password: string;
+  role: string;
+}>;
 
+function uniqueEmail(prefix = "user") {
+  const rand = crypto.randomBytes(6).toString("hex");
+  return `${prefix}-${Date.now()}-${rand}@test.com`.toLowerCase();
+}
+
+export async function registerTestUser(overrides: RegisterOverrides = {}) {
+  const email = String(overrides.email ?? uniqueEmail("user")).toLowerCase();
+
+  // Build payload in a type-safe way (no TS complaining)
   const payload = {
-    fullName: "Test User",
+    fullName: overrides.fullName ?? "Test User",
     email,
-    countryCode: "+977",
-    phone: "9800000000",
-    address: "Kathmandu",
-    password: overrides?.password ?? DEFAULT_PASSWORD,
-    ...overrides,
+    countryCode: overrides.countryCode ?? "+977",
+    phone: overrides.phone ?? "9800000000",
+    address: overrides.address ?? "Kathmandu",
+    password: overrides.password ?? DEFAULT_PASSWORD,
   };
 
   const res = await request(app).post("/api/auth/register").send(payload);
 
   if (res.status !== 201) {
-    throw new Error(
-      `Register failed (${res.status}): ${JSON.stringify(res.body)}`
-    );
+    throw new Error(`Register failed (${res.status}): ${JSON.stringify(res.body)}`);
   }
 
   return { email, password: payload.password, res };
@@ -48,7 +62,6 @@ export async function createUserAndGetToken() {
 export async function createAdminAndGetToken() {
   const { email, password } = await registerTestUser();
 
-  // promote to admin
   await UserModel.updateOne({ email }, { $set: { role: "admin" } });
 
   const loginRes = await loginTestUser(email, password);

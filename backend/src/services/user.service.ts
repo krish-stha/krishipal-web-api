@@ -10,6 +10,11 @@ import { sendResetEmail } from "./mail.service";
 
 const userRepo = new UserRepository();
 
+function gen6DigitCode() {
+  // 100000 - 999999
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
 export class UserService {
   async register(data: CreateUserDTO) {
     const exists = await userRepo.getByEmail(data.email);
@@ -43,7 +48,6 @@ export class UserService {
       { expiresIn: "30d" }
     );
 
-    // remove password in response
     const safeUser = await userRepo.getById(String(user._id));
     return { user: safeUser, token };
   }
@@ -83,34 +87,41 @@ export class UserService {
     return updated;
   }
 
-  // ✅ NEW: Forgot password
-  // - Always returns success (even if email not found) to avoid user enumeration
-  // - Stores token + expiry in DB
+  // ✅ Forgot password
+  // - Always returns success even if email not found
+  // - Stores token + expiry in DB (same as before)
+  // - Sends BOTH: link + 6-digit code (NO verification added)
   async forgotPassword(email: string) {
-  const user = await UserModel.findOne({
-    email: email.toLowerCase(),
-    deleted_at: null,
-  });
+    const user = await UserModel.findOne({
+      email: email.toLowerCase(),
+      deleted_at: null,
+    });
 
-  if (!user) {
-    return { message: "If your email exists, a reset link has been sent." };
+    if (!user) {
+      return { message: "If your email exists, a reset link has been sent." };
+    }
+
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+
+    user.reset_password_token = tokenHash;
+    user.reset_password_expires_at = new Date(Date.now() + 1000 * 60 * 15);
+    await user.save();
+
+    // ✅ NEW: generate a code (not stored/verified - as per your request)
+    const code = gen6DigitCode();
+
+    // ✅ add code into link for frontend UI (not verified by backend)
+    const resetLink =
+      `${process.env.FRONTEND_URL}` +
+      `/auth/reset-password?token=${rawToken}&code=${code}`;
+
+    await sendResetEmail(user.email, resetLink, code);
+
+    return { message: "Reset email sent successfully." };
   }
 
-  const rawToken = crypto.randomBytes(32).toString("hex");
-  const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
-
-  user.reset_password_token = tokenHash;
-  user.reset_password_expires_at = new Date(Date.now() + 1000 * 60 * 15);
-  await user.save();
-
-  const resetLink = `${process.env.FRONTEND_URL}/auth/reset-password?token=${rawToken}`;
-
-  await sendResetEmail(user.email, resetLink);
-
-  return { message: "Reset email sent successfully." };
-}
-
-  // ✅ NEW: Reset password
+  // ✅ Reset password (token only)
   async resetPassword(token: string, newPassword: string) {
     const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
 

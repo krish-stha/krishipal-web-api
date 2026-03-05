@@ -259,7 +259,7 @@ export default function TrackOrderPage() {
         const res = await initiateKhaltiPayment(id);
         const paymentUrl = res?.data?.payment_url;
         if (!paymentUrl) throw new Error("No payment_url received");
-        window.location.href = paymentUrl;
+        window.location.assign(paymentUrl);
       } catch (e: any) {
         setError(e?.response?.data?.message || e?.message || "Failed to initiate Khalti");
       } finally {

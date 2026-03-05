@@ -1,6 +1,6 @@
 import multer from "multer";
 import path from "path";
-import fs from "fs";
+import * as fs from "fs";
 
 const MAX_IMAGE_SIZE = 2 * 1024 * 1024; // 2MB
 const profilePhotoDir = path.join(process.cwd(), "public", "profile_photo");
